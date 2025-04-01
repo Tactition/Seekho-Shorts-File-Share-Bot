@@ -96,6 +96,20 @@ async def start(client, message):
             InlineKeyboardButton('💁‍♀️ 𝑷𝒖𝒓𝒑𝒐𝒔𝒆', callback_data='help'),
             InlineKeyboardButton('😊 𝘼𝙗𝙤𝙪𝙩 ', callback_data='about')
         ]]
+        first_name = message.from_user.first_name
+        welcome_text = (
+            f"To download a video From Seekho Seekho App, use the command:\n"
+            "/download <video_link>\n\n"
+            "Example:\n"
+            "/download https://seekho.in/video-link\n\n"
+            "Or use a shortened link:\n"
+            "/download https://seekho.page.link/example\n\n"
+            "The bot will automatically Download the video, and Will send it to you.\n\n"
+            "Alternatively, you can also visit our web interface at: " + KOYEB_URL + "\n\n"
+            "Also Join @Self_Improvement_Audiobooks for Premium Audiobooks!\n\n"
+        )
+        await message.reply_text(welcome_text, parse_mode="html")
+
         if CLONE_MODE == True:
             buttons.append([InlineKeyboardButton('🤖 ᴄʀᴇᴀᴛᴇ ʏᴏᴜʀ ᴏᴡɴ ᴄʟᴏɴᴇ ʙᴏᴛ', callback_data='clone')])
         reply_markup = InlineKeyboardMarkup(buttons)
@@ -583,7 +597,7 @@ async def process_video_link(video_link):
 @Client.on_message(filters.command("download"))
 async def download_handler(client, message: Message):
     if len(message.command) < 2:
-        message.reply_text("Usage: /download <video link> [output file name]")
+        await message.reply_text("Usage: /download <video link> [output file name]")
         return
 
     video_link = message.command[1].strip()
