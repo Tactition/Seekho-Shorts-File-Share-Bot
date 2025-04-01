@@ -63,7 +63,6 @@ def formate_file_name(file_name):
 
 @Client.on_message(filters.command("start") & filters.incoming)
 async def start(client, message):
-    
     # Check subscription if AUTH_CHANNEL is defined.
     if AUTH_CHANNEL:
         try:
@@ -107,19 +106,6 @@ async def start(client, message):
             reply_markup=reply_markup
         )
         return
-    
-    first_name = message.from_user.first_name
-    welcome_text = (
-        f"Welcome <b>{first_name}</b> to the Seekho Video Downloader Bot!\n\n"
-        "To download a video, use the command:\n"
-        "<code>/download &lt;video_link&gt; [output_file.mp4]</code>\n\n"
-        "Example:\n"
-        "<code>/download https://seekho.in/video-link</code>\n\n"
-        "Or with a shortened link:\n"
-        "<code>/download https://seekho.page.link/example</code>\n\n"
-        "The bot will download the video and send it back to you!"
-    )
-    message.reply_text(welcome_text, parse_mode="html")
 
     data = message.command[1]
     try:
@@ -507,7 +493,7 @@ if not os.path.exists(DOWNLOAD_FOLDER):
     os.makedirs(DOWNLOAD_FOLDER)
 
 # Utility Functions
-def resolve_shortened_url(url):
+async def resolve_shortened_url(url):
     """
     Resolves a shortened URL to its final destination by following redirects.
     Uses raw socket connections to handle HTTP and HTTPS requests.
@@ -570,10 +556,10 @@ def resolve_shortened_url(url):
     print(f"Maximum redirects reached. Last URL: {url}")
     return url
 
-def extract_m3u8_links(html_content):
+async def extract_m3u8_links(html_content):
     return re.findall(r"(https?://[^\s'\"<>]+\.m3u8)", html_content)
 
-def download_with_ffmpeg(m3u8_url, output_path):
+async def download_with_ffmpeg(m3u8_url, output_path):
     try:
         command = [
             "ffmpeg", "-i", m3u8_url, "-c", "copy", "-bsf:a", "aac_adtstoasc", "-y", output_path
@@ -584,7 +570,7 @@ def download_with_ffmpeg(m3u8_url, output_path):
     except subprocess.CalledProcessError as e:
         raise Exception(f"FFmpeg error: {e}")
 
-def process_video_link(video_link):
+async def process_video_link(video_link):
     if "seekho.page.link" in video_link:
         print(f"Detected seekho.page.link in URL, resolving: {video_link}")
         resolved_url = resolve_shortened_url(video_link)
@@ -595,7 +581,7 @@ def process_video_link(video_link):
 # Command Handlers
 
 @Client.on_message(filters.command("download"))
-def download_handler(client, message: Message):
+async def download_handler(client, message: Message):
     if len(message.command) < 2:
         message.reply_text("Usage: /download <video link> [output file name]")
         return
