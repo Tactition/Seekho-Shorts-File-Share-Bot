@@ -6,8 +6,8 @@ RUN apt update && apt upgrade -y && apt install -y git ffmpeg
 COPY requirements.txt /requirements.txt
 RUN pip3 install -U pip && pip3 install -U -r /requirements.txt
 
-RUN mkdir /Advanced-Audiobooks-FileShare-Bot
-WORKDIR /Advanced-Audiobooks-FileShare-Bot
-COPY . /Advanced-Audiobooks-FileShare-Bot
+RUN mkdir /Seekho-Shorts-File-Share-Bot
+WORKDIR /Seekho-Shorts-File-Share-Bot
+COPY . /Seekho-Shorts-File-Share-Bot
 
 CMD ["python", "bot.py"]
