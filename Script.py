@@ -4,18 +4,16 @@ class script(object):
 **Hello {}, my name is {}!**
 
 I am an advanced and powerful Resources Alchemist created for excellerating growth of mankind.
-## **What I Can Do:**
+**What I Can Do:**
 You can download videos from Seekho app or websites using this bot. Just send me a video link and I will download it for you! And you can also use this bot to Get Resources like Seekho Premium Videos, Audiobooks, Courses and much more with a special link Given By @Excellerators.
 
 `/download` - Download a video from Seekho
-### **Examples:**
+**Examples:**
 • `/download https://seekho.in/video-link`
 • Or use a Page link:
   `/download https://seekho.page.link/example`
 
-The bot will automatically download the video and send it to you! ⚡️
----
-📚 Join @Self_Improvement_Audiobooks for Premium Audiobooks!
+The bot will automatically download the video and send it to you!
     """
 
 
