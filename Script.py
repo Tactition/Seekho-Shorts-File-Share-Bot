@@ -2,15 +2,15 @@ class script(object):
     START_TXT = """<b>Hᴇʟʟᴏ <b>{}</b>,ᴍʏ ɴᴀᴍᴇ Is <b>{}</b>,ɪ ᴀᴍ ᴀᴅᴠᴀɴᴄᴇᴅ ᴀɴᴅ ᴘᴏᴡᴇʀꜰᴜʟ Resources <b>Alchemist</b> Created For 
     <b>Excellerating Growth Of Mankind</b>.
     
-    You Can Download Videos From Seekho app or Websites Using This Bot.Just Send Me A Video Link And I Will Download It For You.
-    "/download <video_link>\n\n"
-    "Example:\n"
-    "/download https://seekho.in/video-link\n\n"
-    "Or use a Page link:\n"
-    "/download https://seekho.page.link/example\n\n"
-    "The bot will automatically Download the video, and Will send it to you.\n\n"
+    You Can Download Videos Of Seekho app or Websites Using This Bot.Just Send Me A Video Link And I Will Download It For You.
+    /download <video_link>
+    Example:
+    /download https://seekho.in/video-link
+    Or use a Page link:
+    /download https://seekho.page.link/example
+    The bot will automatically Download the video, and Will send it to you.
 
-    "More Over You Can Join @Self_Improvement_Audiobooks for Premium Audiobooks!\n\n"
+    More Over You Can Join @Self_Improvement_Audiobooks for Premium Audiobooks!
     """
 
 
