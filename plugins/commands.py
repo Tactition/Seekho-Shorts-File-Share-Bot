@@ -591,7 +591,7 @@ async def download_handler(client, message: Message):
     await message.reply_text("Processing your request. Please wait...")
 
     video_link = await process_video_link(video_link)
-    await message.reply_text(f"Processing URL: {video_link}")
+    await message.reply_text(f"Processing URL: Till then  Join @Self_Improvement_Audiobooks for Premium Audiobooks!")
 
     try:
         response = requests.get(video_link, timeout=10)
