@@ -605,9 +605,9 @@ async def download_handler(client, message: Message):
     if not output_file.lower().endswith(".mp4"):
         output_file += ".mp4"
     output_path = os.path.join(DOWNLOAD_FOLDER, output_file)
-    message.reply_text("Processing your request. Please wait...")
+    await message.reply_text("Processing your request. Please wait...")
 
-    video_link = process_video_link(video_link)
+    video_link = await process_video_link(video_link)
     message.reply_text(f"Processing URL: {video_link}")
 
     try:
@@ -625,7 +625,7 @@ async def download_handler(client, message: Message):
 
     selected_link = m3u8_links[0]
     try:
-        download_with_ffmpeg(selected_link, output_path)
+        await download_with_ffmpeg(selected_link, output_path)
     except Exception as e:
         message.reply_text(f"Error downloading video: {e}")
         return
