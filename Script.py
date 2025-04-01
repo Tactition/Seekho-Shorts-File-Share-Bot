@@ -1,17 +1,24 @@
 class script(object):
-    START_TXT = """<b>Hᴇʟʟᴏ <b>{}</b>,ᴍʏ ɴᴀᴍᴇ Is <b>{}</b>,ɪ ᴀᴍ ᴀᴅᴠᴀɴᴄᴇᴅ ᴀɴᴅ ᴘᴏᴡᴇʀꜰᴜʟ Resources <b>Alchemist</b> Created For 
-    <b>Excellerating Growth Of Mankind</b>.
-    
-    You Can Download Videos Of Seekho app or Websites Using This Bot.Just Send Me A Video Link And I Will Download It For You.
-    /download <video_link>
-    Example:
-    /download https://seekho.in/video-link
-    Or use a Page link:
-    /download https://seekho.page.link/example
-    The bot will automatically Download the video, and Will send it to you.
+    START_TXT = """# **📱 Seekho Video Downloader**
 
-    More Over You Can Join @Self_Improvement_Audiobooks for Premium Audiobooks!
+**Hello {}, my name is {}!**
+
+I am an advanced and powerful Resources Alchemist created for excellerating growth of mankind.
+## **What I Can Do:**
+You can download videos from Seekho app or websites using this bot. Just send me a video link and I will download it for you! And you can also use this bot to Get Resources like Seekho Premium Videos, Audiobooks, Courses and much more with a special link Given By @Excellerators.
+
+`/download` - Download a video from Seekho
+### **Examples:**
+• `/download https://seekho.in/video-link`
+• Or use a Page link:
+  `/download https://seekho.page.link/example`
+
+The bot will automatically download the video and send it to you! ⚡️
+---
+📚 Join @Self_Improvement_Audiobooks for Premium Audiobooks!
     """
+
+
 
 
 
