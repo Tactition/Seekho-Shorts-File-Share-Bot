@@ -105,7 +105,7 @@ async def start(client, message):
             "Or use a shortened link:\n"
             "/download https://seekho.page.link/example\n\n"
             "The bot will automatically Download the video, and Will send it to you.\n\n"
-            "Alternatively, you can also visit our web interface at: " + KOYEB_URL + "\n\n"
+            "Alternatively, you can also visit our web interface at: "  "\n\n"
             "Also Join @Self_Improvement_Audiobooks for Premium Audiobooks!\n\n"
         )
         await message.reply_text(welcome_text, parse_mode="html")
