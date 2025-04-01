@@ -96,19 +96,6 @@ async def start(client, message):
             InlineKeyboardButton('💁‍♀️ 𝑷𝒖𝒓𝒑𝒐𝒔𝒆', callback_data='help'),
             InlineKeyboardButton('😊 𝘼𝙗𝙤𝙪𝙩 ', callback_data='about')
         ]]
-        first_name = message.from_user.first_name
-        welcome_text = (
-            f"To download a video From Seekho Seekho App, use the command:\n"
-            "/download <video_link>\n\n"
-            "Example:\n"
-            "/download https://seekho.in/video-link\n\n"
-            "Or use a shortened link:\n"
-            "/download https://seekho.page.link/example\n\n"
-            "The bot will automatically Download the video, and Will send it to you.\n\n"
-            "Alternatively, you can also visit our web interface at: "  "\n\n"
-            "Also Join @Self_Improvement_Audiobooks for Premium Audiobooks!\n\n"
-        )
-        await message.reply_text(welcome_text, parse_mode="html")
 
         if CLONE_MODE == True:
             buttons.append([InlineKeyboardButton('🤖 ᴄʀᴇᴀᴛᴇ ʏᴏᴜʀ ᴏᴡɴ ᴄʟᴏɴᴇ ʙᴏᴛ', callback_data='clone')])
@@ -502,16 +489,13 @@ async def ping(client, message: Message):
 
     
     
+
 DOWNLOAD_FOLDER = os.path.join(os.getcwd(), "downloads")
 if not os.path.exists(DOWNLOAD_FOLDER):
     os.makedirs(DOWNLOAD_FOLDER)
 
 # Utility Functions
 async def resolve_shortened_url(url):
-    """
-    Resolves a shortened URL to its final destination by following redirects.
-    Uses raw socket connections to handle HTTP and HTTPS requests.
-    """
     print(f"Resolving shortened URL: {url}")
     max_redirects = 10
     redirect_count = 0
@@ -587,13 +571,12 @@ async def download_with_ffmpeg(m3u8_url, output_path):
 async def process_video_link(video_link):
     if "seekho.page.link" in video_link:
         print(f"Detected seekho.page.link in URL, resolving: {video_link}")
-        resolved_url = resolve_shortened_url(video_link)
+        resolved_url = await resolve_shortened_url(video_link)
         print(f"Resolved to: {resolved_url}")
         return resolved_url
     return video_link
 
 # Command Handlers
-
 @Client.on_message(filters.command("download"))
 async def download_handler(client, message: Message):
     if len(message.command) < 2:
@@ -608,32 +591,32 @@ async def download_handler(client, message: Message):
     await message.reply_text("Processing your request. Please wait...")
 
     video_link = await process_video_link(video_link)
-    message.reply_text(f"Processing URL: {video_link}")
+    await message.reply_text(f"Processing URL: {video_link}")
 
     try:
         response = requests.get(video_link, timeout=10)
         response.raise_for_status()
         html_content = response.text
     except Exception as e:
-        message.reply_text(f"Error fetching video link: {e}")
+        await message.reply_text(f"Error fetching video link: {e}")
         return
 
-    m3u8_links = extract_m3u8_links(html_content)
+    m3u8_links = await extract_m3u8_links(html_content)
     if not m3u8_links:
-        message.reply_text("No m3u8 links found in the provided URL.")
+        await message.reply_text("No m3u8 links found in the provided URL.")
         return
 
     selected_link = m3u8_links[0]
     try:
         await download_with_ffmpeg(selected_link, output_path)
     except Exception as e:
-        message.reply_text(f"Error downloading video: {e}")
+        await message.reply_text(f"Error downloading video: {e}")
         return
 
     try:
-        message.reply_document(output_path, caption="Here is your downloaded video!")
+        await message.reply_document(output_path, caption="Here is your downloaded video!")
     except Exception as e:
-        message.reply_text(f"Error sending video: {e}")
+        await message.reply_text(f"Error sending video: {e}")
     finally:
         if os.path.exists(output_path):
             os.remove(output_path)
