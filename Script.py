@@ -1,13 +1,9 @@
 class script(object):
-    START_TXT = """# **📱 Seekho Video Downloader**
+    START_TXT = """**Hello {}, I’m your ultimate 📱 {} And provider bot!  !**
 
-**Hello {}, my name is {}!**
+I can help you download premium videos and shorts from the Seekho app, and I can also Provide you premium courses and audiobooks from a special link Given by @Excellerators
 
-I am an advanced and powerful Resources Alchemist created for excellerating growth of mankind.
-**What I Can Do:**
-You can download videos from Seekho app or websites using this bot. Just send me a video link and I will download it for you! And you can also use this bot to Get Resources like Seekho Premium Videos, Audiobooks, Courses and much more with a special link Given By @Excellerators.
-
-`/download` - Download a video from Seekho
+`/download` - To Download a video from Seekho app or Website
 **Examples:**
 • `/download https://seekho.in/video-link`
 • Or use a Page link:
@@ -49,11 +45,7 @@ If You Want To Remove Api Then Copy This And Send To Bot - `/api None`"""
 +├ ᴍᴜʟᴛɪ-ᴘʟᴀʏᴇʀ ꜱᴛʀᴇᴀᴍɪɴɢ, ᴜʀʟ ꜱʜᴏʀᴛᴇɴɪɴɢ, ᴀᴜᴛᴏ ᴅᴇʟᴇᴛᴇ ┤+
  ᢿɪғ ʏᴏᴜ ᴡᴀɴᴛ ᴛʜᴇse ғᴇᴀᴛᴜʀᴇs ᴛʜᴇɴ ᴄʀᴇᴀᴛᴇ ʏᴏᴜʀ ᴏᴡɴ ᴄʟᴏɴᴇ ʙᴏᴛ ғʀᴏᴍ ᴍʏ <a href=https://t.me/R3volutionary_Bot >ᴘᴀʀᴇɴᴛ</a></b>"""
 
-    ABOUT_TXT = """<b>Asalamualikum, ɪ ᴀᴍ ᴛʜᴇ ᴀᴅᴠᴀɴᴄᴇᴅ ꜰɪʟᴇ ꜱᴛᴏʀᴇ ʙᴏᴛ</b> ᴡɪᴛʜ ᴄʟᴏɴᴇ ғᴇᴀᴛᴜʀᴇ + ᴄᴜsᴛᴏᴍ ᴜʀʟ sʜᴏʀᴛɴᴇʀ + ᴀᴜᴛᴏ ᴅᴇʟᴇᴛᴇ.
-    
-+├ ᴘᴇʀᴍᴀɴᴇɴᴛ ʟɪɴᴋ, ᴄʟᴏɴɪɴɢ, ꜰᴏʀᴄᴇ ꜱᴜʙ ᴀɴᴅ ᴛᴏᴋᴇɴ ᴠᴇʀɪꜰɪᴄᴀᴛɪᴏɴ ┤+
-
-+├ ᴍᴜʟᴛɪ-ᴘʟᴀʏᴇʀ ꜱᴛʀᴇᴀᴍɪɴɢ, ᴜʀʟ ꜱʜᴏʀᴛᴇɴɪɴɢ, ʙᴀᴛᴄʜ ᴀɴᴅ ᴀᴜᴛᴏ ᴅᴇʟᴇᴛᴇ ┤+
+    ABOUT_TXT = """<b>Asalamualikum, Habibi! . I am a bot to download premium videos and shorts from the Seekho app, and I can also Provide you premium courses and audiobooks from a special link Given by @Excellerators</b>
 
 🤖 ɴᴀᴍᴇ: {}
 
@@ -69,12 +61,7 @@ If You Want To Remove Api Then Copy This And Send To Bot - `/api None`"""
 """
 
 
-    CABOUT_TXT = """<b>Asalamualikum, ɪ ᴀᴍ ᴛʜᴇ ᴀᴅᴠᴀɴᴄᴇᴅ ꜰɪʟᴇ ꜱᴛᴏʀᴇ ʙᴏᴛ</b> ᴡɪᴛʜ ᴄʟᴏɴᴇ ғᴇᴀᴛᴜʀᴇ + ᴄᴜsᴛᴏᴍ ᴜʀʟ sʜᴏʀᴛɴᴇʀ + ᴀᴜᴛᴏ ᴅᴇʟᴇᴛᴇ.
-    
-+├ ᴘᴇʀᴍᴀɴᴇɴᴛ ʟɪɴᴋ, ᴄʟᴏɴɪɴɢ, ꜰᴏʀᴄᴇ ꜱᴜʙ ᴀɴᴅ ᴛᴏᴋᴇɴ ᴠᴇʀɪꜰɪᴄᴀᴛɪᴏɴ ┤+
-
-+├ ᴍᴜʟᴛɪ-ᴘʟᴀʏᴇʀ ꜱᴛʀᴇᴀᴍɪɴɢ, ᴜʀʟ ꜱʜᴏʀᴛᴇɴɪɴɢ, ʙᴀᴛᴄʜ ᴀɴᴅ ᴀᴜᴛᴏ ᴅᴇʟᴇᴛᴇ ┤+
-
+    CABOUT_TXT = """
 🤖 ᴍʏ ɴᴀᴍᴇ: {}
 
 📝 ʟᴀɴɢᴜᴀɢᴇ: <a href=https://www.python.org>𝐏𝐲𝐭𝐡𝐨𝐧𝟑</a>
