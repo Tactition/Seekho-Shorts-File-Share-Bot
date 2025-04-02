@@ -13,13 +13,13 @@ def is_enabled(value, default):
         return default
 
 # Bot Information
-API_ID = int(environ.get("API_ID", "26205215"))
-API_HASH = environ.get("API_HASH", "d4d9b7bce6d76bec759e404ecf2c3ebf")
-BOT_TOKEN = environ.get("BOT_TOKEN", "7858262825:AAE1GT1qdWl6XRRJ0R-2LTwvQliTAIvpD4w")
+API_ID = int(environ.get("API_ID", ""))
+API_HASH = environ.get("API_HASH", "")
+BOT_TOKEN = environ.get("BOT_TOKEN", "")
 
 PICS = (environ.get('PICS', 'https://freeimage.host/i/d10VHep')).split() # Bot Start Picture
 ADMINS = [int(admin) if id_pattern.search(admin) else admin for admin in environ.get('ADMINS', '1178233430').split()]
-BOT_USERNAME = environ.get("BOT_USERNAME", "SeekhoShortsDownloader_bot") # without @
+BOT_USERNAME = environ.get("BOT_USERNAME", "") # without @
 PORT = environ.get("PORT", "8080")
 
 # Clone Info :-
@@ -29,7 +29,7 @@ CLONE_DB_URI = environ.get("CLONE_DB_URI", "")
 CDB_NAME = environ.get("CDB_NAME", "")
 
 # Database Information
-DB_URI = environ.get("DB_URI", "mongodb+srv://ZahidNazir:ZahidNazir@1stcluster.1p0dlne.mongodb.net/?retryWrites=true&w=majority&appName=1stcluster")
+DB_URI = environ.get("DB_URI", "")
 DB_NAME = environ.get("DB_NAME", "SeekhoShortsDownloader") # Database Name
 
 # Auto Delete Information
