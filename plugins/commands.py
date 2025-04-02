@@ -91,7 +91,7 @@ async def start(client, message):
         # ],
         [
             InlineKeyboardButton('🔍 sᴜᴘᴘᴏʀᴛ ɢʀᴏᴜᴘ', url='https://t.me/Excellerators_Discussion'),
-            InlineKeyboardButton('🤖 ᴜᴘᴅᴀᴛᴇ ᴄʜᴀɴɴᴇʟ', url='https://t.me/ExcelleratorsEdge')
+            InlineKeyboardButton('🤖 ᴜᴘᴅᴀᴛᴇ ᴄʜᴀɴɴᴇʟ', url='https://t.me/SeekhoShorts')
         ],[
             InlineKeyboardButton('💁‍♀️ 𝑷𝒖𝒓𝒑𝒐𝒔𝒆', callback_data='help'),
             InlineKeyboardButton('😊 𝘼𝙗𝙤𝙪𝙩 ', callback_data='about')
@@ -249,7 +249,7 @@ async def start(client, message):
     try:
         pre, decode_file_id = (base64.urlsafe_b64decode(data + "=" * (-len(data) % 4)).decode("ascii")).split("_", 1)
     except Exception as e:
-        return await message.reply_text("Please get the link from @ExcelleratorsEdge to access the files From Torrent Servers.")
+        return await message.reply_text("Please get the link from @SeekhoShorts to access the files From Torrent Servers.")
         # Invalid link provided link text will be send by upper line if didnt have the right link to get file after start command!
     if not await check_verification(client, message.from_user.id) and VERIFY_MODE == True:
         btn = [[
@@ -392,7 +392,7 @@ async def cb_handler(client: Client, query: CallbackQuery):
         # ],
         [
             InlineKeyboardButton('🔍 sᴜᴘᴘᴏʀᴛ ɢʀᴏᴜᴘ', url='https://t.me/Excellerators_Discussion'),
-            InlineKeyboardButton('🤖 ᴜᴘᴅᴀᴛᴇ ᴄʜᴀɴɴᴇʟ', url='https://t.me/ExcelleratorsEdge')
+            InlineKeyboardButton('🤖 ᴜᴘᴅᴀᴛᴇ ᴄʜᴀɴɴᴇʟ', url='https://t.me/SeekhoShorts')
         ],[
             InlineKeyboardButton('💁‍♀️ 𝑷𝒖𝒓𝒑𝒐𝒔𝒆', callback_data='help'),
             InlineKeyboardButton('😊 𝘼𝙗𝙤𝙪𝙩 ', callback_data='about')
@@ -580,7 +580,7 @@ async def process_video_link(video_link):
 @Client.on_message(filters.command("download"))
 async def download_handler(client, message: Message):
     if len(message.command) < 2:
-        await message.reply_text("Usage: /download <video link> [output file name]")
+        await message.reply_text("Usage: /download [video link]")
         return
 
     video_link = message.command[1].strip()

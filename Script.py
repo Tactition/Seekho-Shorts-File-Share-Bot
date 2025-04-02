@@ -57,7 +57,7 @@ If You Want To Remove Api Then Copy This And Send To Bot - `/api None`"""
 
 👥 sᴜᴘᴘᴏʀᴛ ɢʀᴏᴜᴘ: <a href=https://t.me/Excellerators_Discussion>Join Here</a>
 
-📢 Main ᴄʜᴀɴɴᴇʟ: <a href=https://t.me/ExcelleratorsEdge>Excellerators</a></b>
+📢 Main ᴄʜᴀɴɴᴇʟ: <a href=https://t.me/SeekhoShorts>SeekhoShorts</a></b>
 """
 
 
@@ -117,14 +117,14 @@ First Send /clone command then follow below steps.
 
 
 
-    LOG_TEXT = """<b> New User Added To Courses Database 🔥
+    LOG_TEXT = """<b> New User Added To Seekho Database 🔥
     
 ID - <code>{}</code>
 
 Nᴀᴍᴇ - {}</b>
 """
     RESTART_TXT = """
-<b>Courses Empire Rᴇsᴛᴀʀᴛᴇᴅ !
+<b>Seekho Shorts Empire Rᴇsᴛᴀʀᴛᴇᴅ !
 
 📅 Dᴀᴛᴇ : <code>{}</code>
 ⏰ Tɪᴍᴇ : <code>{}</code>
