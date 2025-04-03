@@ -614,7 +614,7 @@ async def download_handler(client, message: Message):
         return
 
     try:
-        await message.reply_document(output_path, caption="Here is your downloaded video!")
+        await message.reply_document(output_path, caption="Enjoy your video!")
     except Exception as e:
         await message.reply_text(f"Error sending video: {e}")
     finally:
