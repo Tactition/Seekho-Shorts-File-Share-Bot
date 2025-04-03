@@ -18,7 +18,7 @@ The bot will automatically download the video and send it to you!
 
     
     CAPTION = """╭────────────────╮
-    █ Short Details █
+    █ Shorts Meta Details █
 ╰────────────────╯ 
 ╰─➩ <b>📂 ғɪʟᴇɴᴀᴍᴇ : {file_name} </b>
 ╰─➩ <b>📦 sɪᴢᴇ :  {file_size} </b>
