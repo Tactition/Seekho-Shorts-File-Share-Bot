@@ -90,7 +90,7 @@ async def start(client, message):
         #     InlineKeyboardButton('💝 sᴜʙsᴄʀɪʙᴇ ᴍʏ ʏᴏᴜᴛᴜʙᴇ ᴄʜᴀɴɴᴇʟ', url='')
         # ],
         [
-            InlineKeyboardButton('🔍 sᴜᴘᴘᴏʀᴛ ɢʀᴏᴜᴘ', url='https://t.me/Excellerators_Discussion'),
+            InlineKeyboardButton('🔍 sᴜᴘᴘᴏʀᴛ ɢʀᴏᴜᴘ', url='https://t.me/TeamExcellerators'),
             InlineKeyboardButton('🤖 ᴜᴘᴅᴀᴛᴇ ᴄʜᴀɴɴᴇʟ', url='https://t.me/SeekhoShorts')
         ],[
             InlineKeyboardButton('💁‍♀️ 𝑷𝒖𝒓𝒑𝒐𝒔𝒆', callback_data='help'),
@@ -391,7 +391,7 @@ async def cb_handler(client: Client, query: CallbackQuery):
         #     InlineKeyboardButton('💝 sᴜʙsᴄʀɪʙᴇ ᴍʏ ʏᴏᴜᴛᴜʙᴇ ᴄʜᴀɴɴᴇʟ', url='https://youtube.com/@')
         # ],
         [
-            InlineKeyboardButton('🔍 sᴜᴘᴘᴏʀᴛ ɢʀᴏᴜᴘ', url='https://t.me/Excellerators_Discussion'),
+            InlineKeyboardButton('🔍 sᴜᴘᴘᴏʀᴛ ɢʀᴏᴜᴘ', url='https://t.me/TeamExcellerators'),
             InlineKeyboardButton('🤖 ᴜᴘᴅᴀᴛᴇ ᴄʜᴀɴɴᴇʟ', url='https://t.me/SeekhoShorts')
         ],[
             InlineKeyboardButton('💁‍♀️ 𝑷𝒖𝒓𝒑𝒐𝒔𝒆', callback_data='help'),
