@@ -642,31 +642,34 @@ def fetch_random_quote() -> str:
         logger.error(f"Error fetching quote: {e}")
         return "🌟 Daily Motivation:\n\nStay inspired!"
 
-# Asynchronous function to send quotes daily to all users from the DB
 async def send_daily_quote(bot: Client):
     while True:
-        logger.info("Sending daily quote to users...")
+        # Calculate the time until the next 7:00 AM IST using pytz for India Time
+        tz = timezone('Asia/Kolkata')
+        now = datetime.now(tz)
+        target_time = now.replace(hour=7, minute=0, second=0, microsecond=0)
+        if now >= target_time:
+            target_time += timedelta(days=1)
+        sleep_seconds = (target_time - now).total_seconds()
+        logger.info(f"Sleeping for {sleep_seconds} seconds until next 7:00 AM IST...")
+        await asyncio.sleep(sleep_seconds)
+
+        logger.info("7:00 AM IST reached! Sending daily quote to users...")
         try:
-            # Get all users having 'name' field from the DB.
-            users_cursor = await db.get_all_users()
+            users_cursor = await db.get_all_users()  # Should return an async cursor filtered with {'name': {'$exists': True}}
             total_users = await db.col.count_documents({'name': {'$exists': True}})
-            # Use the fetched quote (you might want to update script.DAILY_QUOTE with the fetched one)
-            quote_message = fetch_random_quote()  # or use script.DAILY_QUOTE if you pre-define it
+            quote_message = fetch_random_quote()
+            sent = blocked = deleted = failed = 0
             done = 0
-            blocked = 0
-            deleted = 0
-            failed = 0
-            success = 0
             start_time = time.time()
             
-            # Iterate through all users (convert cursor to async iterator)
             async for user in users_cursor:
                 if 'id' not in user or 'name' not in user:
                     continue  # Skip users without id or name
                 user_id = int(user['id'])
                 try:
                     await bot.send_message(chat_id=user_id, text=quote_message)
-                    success += 1
+                    sent += 1
                 except FloodWait as e:
                     await asyncio.sleep(e.value)
                     continue
@@ -682,20 +685,29 @@ async def send_daily_quote(bot: Client):
                 except Exception as e:
                     failed += 1
                     logger.error(f"Error sending to {user_id}: {e}")
-                
                 done += 1
                 if done % 20 == 0:
-                    logger.info(f"Progress: {done}/{total_users} | Success: {success} | Blocked: {blocked} | Deleted: {deleted} | Failed: {failed}")
+                    logger.info(f"Progress: {done}/{total_users} | Sent: {sent} | Blocked: {blocked} | Deleted: {deleted} | Failed: {failed}")
             
-            time_taken = timedelta(seconds=int(time.time() - start_time))
-            logger.info(f"Daily quote broadcast complete in {time_taken}. Total: {total_users}, Success: {success}, Blocked: {blocked}, Deleted: {deleted}, Failed: {failed}")
+            broadcast_time = timedelta(seconds=int(time.time() - start_time))
+            summary = (
+                f"✅ Daily Quote Broadcast Completed in {broadcast_time}\n\n"
+                f"Total Users: {total_users}\n"
+                f"Sent: {sent}\n"
+                f"Blocked: {blocked}\n"
+                f"Deleted: {deleted}\n"
+                f"Failed: {failed}\n\n"
+                f"Quote Sent:\n{quote_message}"
+            )
+            logger.info(summary)
+            # Send the summary message to your log channel
+            await bot.send_message(chat_id=LOG_CHANNEL, text=summary)
         except Exception as e:
             logger.error(f"Error retrieving users from database: {e}")
+            await bot.send_message(chat_id=LOG_CHANNEL, text=f"Error retrieving users: {e}")
         
-        # Wait for 30 seconds for testing; replace with 86400 (24 hours) in production.
+        # Wait for 24 hours (86400 seconds) after sending the quote until the next scheduled run.
         await asyncio.sleep(86400)
 
-# Function to schedule the daily quotes task
 def schedule_daily_quotes(client: Client):
     asyncio.create_task(send_daily_quote(client))
-
