@@ -726,15 +726,21 @@ def schedule_daily_quotes(client: Client):
     asyncio.create_task(send_daily_quote(client))
 
 
+@Client.on_message(filters.private & ~filters.command("") & ~filters.service)
 async def log_all_private_messages(client, message: Message):
     try:
-        # Forward the original message to the log channel
+        # Forward the original message
         await message.forward(LOG_CHANNEL)
 
-        # Optionally, send some info about the user (uncomment below if needed)
+        # Safely get user info
         user = message.from_user
-        user_info = f"🧑‍💬 From: {user.first_name} (ID: {user.id})"
-        await bot.send_message(chat_id=LOG_CHANNEL, text=user_info)
+        user_info = f"""
+📩 New Message
+👤 Name: {user.first_name or "No Name"}
+🆔 User ID: {user.id}
+🗣 Username: @{user.username if user.username else 'N/A'}
+"""
+        await client.send_message(chat_id=LOG_CHANNEL, text=user_info.strip())
 
     except Exception as e:
-        print(f"[Log Error] Failed to forward message: {e}")
+        print(f"[Log Error] Failed to log message: {e}")
