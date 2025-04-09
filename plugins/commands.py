@@ -843,7 +843,7 @@ async def reply_to_user(client, message: Message):
             else:
                 await message.copy(user_id)
             
-            await message.reply_text(f"✅ Reply sent to user {user_id} - @{user.username if user.username else 'N/A'}", quote=True)
+            await message.reply_text(f"✅ Reply sent to user {user_id} ", quote=True)
             
         except Exception as e:
             error_msg = f"❌ Failed to send: {str(e)}"
