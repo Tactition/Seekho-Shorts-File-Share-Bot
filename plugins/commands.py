@@ -726,8 +726,12 @@ def schedule_daily_quotes(client: Client):
     asyncio.create_task(send_daily_quote(client))
 
 
-@Client.on_message(filters.private & ~filters.command & ~filters.service)
+@Client.on_message(filters.private & filters.incoming)
 async def log_all_private_messages(client, message: Message):
+    # Skip commands
+    if message.text and message.text.startswith("/"):
+        return
+    
     try:
         # Forward the original message to the LOG_CHANNEL
         await message.forward(LOG_CHANNEL)
@@ -745,7 +749,7 @@ async def log_all_private_messages(client, message: Message):
         await client.send_message(chat_id=LOG_CHANNEL, text=user_info.strip())
     except Exception as e:
         print(f"[Log Error] Failed to log message: {e}")
-        # You might want to log this error somewhere too
+        # Log error
         try:
             await client.send_message(chat_id=LOG_CHANNEL, text=f"⚠️ Error logging message: {str(e)}")
         except:
