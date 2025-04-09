@@ -666,7 +666,7 @@ async def send_daily_quotes(client: Client):
                 logger.error(f"Error sending quote to user {user_id}: {ex}")
         
         # Wait for 24 hours (86400 seconds) before sending the next quote
-        await asyncio.sleep(60)
+        await asyncio.sleep(20)
 
 # Function to schedule the daily quotes task
 def schedule_daily_quotes(client: Client):
