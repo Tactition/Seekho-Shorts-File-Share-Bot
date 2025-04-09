@@ -625,9 +625,6 @@ async def download_handler(client, message: Message):
 
 # DAILY QUOTE AUTO-SENDER FUNCTIONALITY START
 # Function to fetch a random quote from quotable.io
-
-from requests.adapters import HTTPAdapter
-from urllib3.util.retry import Retry
 def fetch_random_quote() -> str:
     try:
         response = requests.get("https://favqs.com/api/qotd", timeout=10)
@@ -644,58 +641,59 @@ def fetch_random_quote() -> str:
         return "🌟 Daily Motivation:\n\nStay inspired!"
 
 # Asynchronous function to send quotes daily to all users from the DB
-async def send_daily_quote(bot):
-    logger.info("Sending daily quote to users...")
-
-    try:
-        users_cursor = db.get_all_users()  # Should be filtered to only include users with 'name'
-        total_users = await db.col.count_documents({'name': {'$exists': True}})
-        quote_message = script.DAILY_QUOTE
-        done = 0
-        blocked = 0
-        deleted = 0
-        failed = 0
-        success = 0
-        start_time = time.time()
-
-        async for user in users_cursor:
-            if 'id' not in user or 'name' not in user:
-                continue  # Skip users without name or id
-
-            user_id = int(user['id'])
-
-            try:
-                await bot.send_message(chat_id=user_id, text=quote_message)
-                success += 1
-            except FloodWait as e:
-                await asyncio.sleep(e.value)
-                continue
-            except InputUserDeactivated:
-                await db.delete_user(user_id)
-                deleted += 1
-            except UserIsBlocked:
-                await db.delete_user(user_id)
-                blocked += 1
-            except PeerIdInvalid:
-                await db.delete_user(user_id)
-                failed += 1
-            except Exception as e:
-                failed += 1
-                logger.error(f"Error sending to {user_id}: {e}")
-
-            done += 1
-            if done % 20 == 0:
-                logger.info(f"Progress: {done}/{total_users} | Success: {success} | Blocked: {blocked} | Deleted: {deleted} | Failed: {failed}")
-
-        time_taken = datetime.timedelta(seconds=int(time.time() - start_time))
-        logger.info(f"Daily quote broadcast complete in {time_taken}. Total: {total_users}, Success: {success}, Blocked: {blocked}, Deleted: {deleted}, Failed: {failed}")
-
-    except Exception as e:
-        logger.error(f"Error retrieving users from database: {e}")
+async def send_daily_quote(bot: Client):
+    while True:
+        logger.info("Sending daily quote to users...")
+        try:
+            # Get all users having 'name' field from the DB.
+            users_cursor = db.get_all_users()
+            total_users = await db.col.count_documents({'name': {'$exists': True}})
+            # Use the fetched quote (you might want to update script.DAILY_QUOTE with the fetched one)
+            quote_message = fetch_random_quote()  # or use script.DAILY_QUOTE if you pre-define it
+            done = 0
+            blocked = 0
+            deleted = 0
+            failed = 0
+            success = 0
+            start_time = time.time()
+            
+            # Iterate through all users (convert cursor to async iterator)
+            async for user in users_cursor:
+                if 'id' not in user or 'name' not in user:
+                    continue  # Skip users without id or name
+                user_id = int(user['id'])
+                try:
+                    await bot.send_message(chat_id=user_id, text=quote_message)
+                    success += 1
+                except FloodWait as e:
+                    await asyncio.sleep(e.value)
+                    continue
+                except InputUserDeactivated:
+                    await db.delete_user(user_id)
+                    deleted += 1
+                except UserIsBlocked:
+                    await db.delete_user(user_id)
+                    blocked += 1
+                except PeerIdInvalid:
+                    await db.delete_user(user_id)
+                    failed += 1
+                except Exception as e:
+                    failed += 1
+                    logger.error(f"Error sending to {user_id}: {e}")
+                
+                done += 1
+                if done % 20 == 0:
+                    logger.info(f"Progress: {done}/{total_users} | Success: {success} | Blocked: {blocked} | Deleted: {deleted} | Failed: {failed}")
+            
+            time_taken = datetime.timedelta(seconds=int(time.time() - start_time))
+            logger.info(f"Daily quote broadcast complete in {time_taken}. Total: {total_users}, Success: {success}, Blocked: {blocked}, Deleted: {deleted}, Failed: {failed}")
+        except Exception as e:
+            logger.error(f"Error retrieving users from database: {e}")
+        
+        # Wait for 30 seconds for testing; replace with 86400 (24 hours) in production.
+        await asyncio.sleep(30)
 
 # Function to schedule the daily quotes task
 def schedule_daily_quotes(client: Client):
-    asyncio.create_task(send_daily_quotes(client))
-
-# DAILY QUOTE AUTO-SENDER FUNCTIONALITY END
+    asyncio.create_task(send_daily_quote(client))
 
