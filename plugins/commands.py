@@ -486,7 +486,7 @@ async def stats(client, message: Message):
     uptime = get_readable_time(uptime_seconds)
     await message.reply(BOT_STATS_TEXT.format(uptime=uptime))
 
-@Client.on_message(filters.command('Zahid') & filters.user(ADMINS))
+@Client.on_message(filters.command('Zahid'))
 async def ping(client, message: Message):
     await message.reply("Zahid is a Hard Working Man Who is the mastermind behind this bot!")
 
