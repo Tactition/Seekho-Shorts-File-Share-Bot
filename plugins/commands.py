@@ -728,25 +728,28 @@ def schedule_daily_quotes(client: Client):
 
 @Client.on_message(filters.private & filters.incoming)
 async def log_all_private_messages(client, message: Message):
-    # Skip commands
-    if message.text and message.text.startswith("/"):
-        return
-    
     try:
-        # Forward the original message to the LOG_CHANNEL
-        await message.forward(LOG_CHANNEL)
-        
-        # Get user information
         user = message.from_user
+        
+        # Create user information header
         user_info = f"""
-📩 New Message
-👤 Name: {user.first_name or "No Name"} {user.last_name or ""}
-🆔 User ID: {user.id}
-🗣 Username: @{user.username if user.username else 'N/A'}
-📆 Time: {datetime.now(timezone('Asia/Kolkata')).strftime('%Y-%m-%d %H:%M:%S')}
+📩 **New Message from User**
+👤 **Name:** {user.first_name or "No Name"} {user.last_name or ""}
+🆔 **User ID:** `{user.id}`
+🗣 **Username:** @{user.username if user.username else 'N/A'}
+📆 **Time:** {datetime.now(timezone('Asia/Kolkata')).strftime('%Y-%m-%d %H:%M:%S')}
+➖➖➖➖➖➖➖➖➖➖➖➖
+**Original Message:**
 """
-        # Send user information to LOG_CHANNEL
-        await client.send_message(chat_id=LOG_CHANNEL, text=user_info.strip())
+        # Send user info with the original message content
+        if message.text:
+            full_message = f"{user_info}\n\n{message.text}"
+            await client.send_message(chat_id=LOG_CHANNEL, text=full_message)
+        else:
+            # For media messages, first send the header then forward the message
+            await client.send_message(chat_id=LOG_CHANNEL, text=user_info)
+            await message.forward(LOG_CHANNEL)
+            
     except Exception as e:
         print(f"[Log Error] Failed to log message: {e}")
         # Log error
