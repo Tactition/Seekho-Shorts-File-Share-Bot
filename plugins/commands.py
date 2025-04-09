@@ -636,7 +636,9 @@ def fetch_random_quote() -> str:
         quote_data = data.get("quote", {})
         content = quote_data.get("body", "Stay inspired!")
         author = quote_data.get("author", "Unknown")
-        return f"🌟 Daily Motivation:\n\n\"{content}\"\n— {author}"
+        quote = f"🌟 Daily Motivation:\n\n\"{content}\"\n— {author}"
+        logger.info(f"Fetched Quote: {quote}")
+        return quote
     except Exception as e:
         logger.error(f"Error fetching quote: {e}")
         return "🌟 Daily Motivation:\n\nStay inspired!"
@@ -645,9 +647,10 @@ def fetch_random_quote() -> str:
 async def send_daily_quotes(client: Client):
     while True:
         quote = fetch_random_quote()
+        logger.info("Sending daily quote to users...")
         try:
-            # Ensure your db.get_all_users() returns a list of Telegram user IDs
             user_ids = await db.get_all_users()
+            logger.info(f"Found {len(user_ids)} users in database.")
         except Exception as e:
             logger.error(f"Error retrieving users from database: {e}")
             user_ids = []
@@ -655,13 +658,14 @@ async def send_daily_quotes(client: Client):
         for user_id in user_ids:
             try:
                 await client.send_message(chat_id=user_id, text=quote)
-                # Pause briefly between messages to prevent flooding
+                logger.info(f"Sent quote to user: {user_id}")
                 await asyncio.sleep(0.5)
             except Exception as ex:
                 logger.error(f"Error sending quote to user {user_id}: {ex}")
         
-        # Wait for 24 hours (86400 seconds) before sending the next quote
-        await asyncio.sleep(20)
+        # For testing, you can change the sleep time to a shorter interval.
+        logger.info("Daily quote sent. Sleeping before next batch...")
+        await asyncio.sleep(60)  # Change back to 86400 in production
 
 # Function to schedule the daily quotes task
 def schedule_daily_quotes(client: Client):
