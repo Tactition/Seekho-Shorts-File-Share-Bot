@@ -737,30 +737,30 @@ def schedule_daily_quotes(client: Client):
 # Helper function to extract user ID from text
 
 def extract_user_id_from_text(text: str) -> int:
-    # Method 1: Look for pattern: #UID123456#
+    # Look for a pattern like "#UID123456#"
     uid_match = re.search(r'#UID(\d+)#', text)
     if uid_match:
         return int(uid_match.group(1))
     
-    # Method 2: Look for "User ID:" followed by a number in backticks
+    # Look for a pattern "User ID: `123456`"
     id_match = re.search(r'User ID:\s*`(\d+)`', text)
     if id_match:
         return int(id_match.group(1))
     
-    # Method 3: Look for pattern: "This message is from User ID: 123456"
+    # Look for a pattern "This message is from User ID: 123456"
     id_match = re.search(r'This message is from User ID:\s*(\d+)', text)
     if id_match:
         return int(id_match.group(1))
     
-    # If not found, return None
     return None
 
-# ================== PRIVATE MESSAGE LOGGING ===================
+# --------------------- PRIVATE MESSAGE LOGGING ---------------------
 @Client.on_message(filters.private & ~filters.command("") & ~filters.service)
 async def log_all_private_messages(client, message: Message):
     try:
         user = message.from_user
-        # Construct a distinct log message with user details
+        
+        # Create a formatted message for logging purposes.
         user_info = (
             "📩 <b>New Message from User Of Seekho Bot</b>\n"
             f"👤 <b>Name:</b> {user.first_name or 'No Name'} {user.last_name or ''}\n"
@@ -775,13 +775,16 @@ async def log_all_private_messages(client, message: Message):
             full_message = f"{user_info}\n\n{message.text}"
             await client.send_message(chat_id=LOG_CHANNEL, text=full_message)
         else:
-            # For media messages: first send the header, then forward the original message
+            # For media messages: first send the header, then forward the media.
             await client.send_message(chat_id=LOG_CHANNEL, text=user_info)
             forwarded = await message.forward(LOG_CHANNEL)
+            
+            # Optionally, reply to the forwarded message with a note.
             try:
                 await forwarded.reply_text(f"👆 This message is from User ID: {user.id}", quote=True)
             except Exception as e:
                 logger.error(f"Error replying to forwarded message: {e}")
+                
     except Exception as e:
         logger.error(f"[Log Error] Failed to log message: {e}")
         try:
@@ -789,20 +792,21 @@ async def log_all_private_messages(client, message: Message):
         except Exception as inner_e:
             logger.error(f"Failed to send error message to log channel: {inner_e}")
 
-# ================== REPLY HANDLER FOR LOG CHANNEL ===================
+# --------------------- REPLY HANDLER FOR LOG CHANNEL ---------------------
 @Client.on_message(filters.chat(LOG_CHANNEL) & filters.reply)
 async def reply_to_user(client, message: Message):
     try:
         replied_msg = message.reply_to_message
         user_id = None
 
-        if replied_msg.text:
+        # Only attempt extraction if the text seems to contain our user marker.
+        if replied_msg.text and "#UID" in replied_msg.text:
             user_id = extract_user_id_from_text(replied_msg.text)
         
-        # Fallback: If user_id is still not found, check if it's a forwarded message
+        # Fallback: If not found, and the message was forwarded, check forward_from.
         if not user_id and replied_msg.forward_from:
             user_id = replied_msg.forward_from.id
-        
+
         if user_id:
             if message.text:
                 await client.send_message(
@@ -814,12 +818,7 @@ async def reply_to_user(client, message: Message):
                 await message.copy(chat_id=user_id)
             await message.reply_text(f"✅ Reply sent to user (ID: {user_id})", quote=True)
         else:
-            debug_info = "Could not find user ID. Text extracted:\n\n"
-            if replied_msg.text:
-                debug_info += replied_msg.text[:500]
-            else:
-                debug_info += "No text available in the replied message."
-            await message.reply_text(f"❌ {debug_info}", quote=True)
+            logger.error("Could not find user ID in the replied message; skipping reply to avoid spamming.")
     except Exception as e:
         logger.error(f"[Reply Error] Failed to send reply: {e}")
         await message.reply_text(f"❌ Error sending reply: {str(e)}", quote=True)
