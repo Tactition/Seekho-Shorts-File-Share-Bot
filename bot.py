@@ -28,6 +28,8 @@ from plugins.clone import restart_bots
 from Zahid.bot import StreamBot
 from Zahid.utils.keepalive import ping_server  # Your ping script imported here
 from Zahid.bot.clients import initialize_clients
+from plugins.commands import schedule_daily_quotes
+
 
 ppath = "plugins/*.py"
 files = glob.glob(ppath)
