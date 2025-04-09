@@ -625,9 +625,18 @@ async def download_handler(client, message: Message):
 
 # DAILY QUOTE AUTO-SENDER FUNCTIONALITY START
 # Function to fetch a random quote from quotable.io
+
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
 def fetch_random_quote() -> str:
     try:
-        response = requests.get("https://api.quotable.io/random", timeout=10)
+        session = requests.Session()
+        retry = Retry(total=3, backoff_factor=1, status_forcelist=[429, 500, 502, 503, 504])
+        adapter = HTTPAdapter(max_retries=retry)
+        session.mount('http://', adapter)
+        session.mount('https://', adapter)
+        
+        response = session.get("https://api.quotable.io/random", timeout=10)
         response.raise_for_status()
         data = response.json()
         content = data.get("content", "Stay inspired!")
