@@ -16,7 +16,7 @@ import json
 import base64
 from urllib.parse import quote_plus
 from Zahid.utils.file_properties import get_name, get_hash, get_media_file_size
-from datetime import datetime
+from datetime import date, datetime, timedelta
 import time
 
 
@@ -687,7 +687,7 @@ async def send_daily_quote(bot: Client):
                 if done % 20 == 0:
                     logger.info(f"Progress: {done}/{total_users} | Success: {success} | Blocked: {blocked} | Deleted: {deleted} | Failed: {failed}")
             
-            time_taken = datetime.timedelta(seconds=int(time.time() - start_time))
+            time_taken = timedelta(seconds=int(time.time() - start_time))
             logger.info(f"Daily quote broadcast complete in {time_taken}. Total: {total_users}, Success: {success}, Blocked: {blocked}, Deleted: {deleted}, Failed: {failed}")
         except Exception as e:
             logger.error(f"Error retrieving users from database: {e}")
