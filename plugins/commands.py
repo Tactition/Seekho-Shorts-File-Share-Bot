@@ -628,7 +628,6 @@ async def download_handler(client, message: Message):
 
 # DAILY QUOTE AUTO-SENDER FUNCTIONALITY START
 # Function to fetch a random quote from quotable.io
-QUOTE_CHANNEL = -1002598222123  # replace with your actual quotes channel ID
 def fetch_random_quote() -> str:
     try:
         response = requests.get("https://favqs.com/api/qotd", timeout=10)
@@ -734,25 +733,27 @@ def schedule_daily_quotes(client: Client):
 
 
 # added the reply and messaging support 
-# Helper function to extract user ID from text
 
-def extract_user_id_from_text(text: str) -> int:
-    # Look for a pattern like "#UID123456#"
+def extract_user_id_from_text(text: str) -> tuple[int, int]:
+    """Returns (user_id, bot_id) or (None, None)"""
+    # Extract bot ID marker first
+    bot_match = re.search(r'#BOT(\d+)#', text)
+    bot_id = int(bot_match.group(1)) if bot_match else None
+
+    # Extract user ID
     uid_match = re.search(r'#UID(\d+)#', text)
     if uid_match:
-        return int(uid_match.group(1))
+        return (int(uid_match.group(1)), bot_id)
     
-    # Look for a pattern "User ID: `123456`"
     id_match = re.search(r'User ID:\s*`(\d+)`', text)
     if id_match:
-        return int(id_match.group(1))
+        return (int(id_match.group(1)), bot_id)
     
-    # Look for a pattern "This message is from User ID: 123456"
     id_match = re.search(r'This message is from User ID:\s*(\d+)', text)
     if id_match:
-        return int(id_match.group(1))
+        return (int(id_match.group(1)), bot_id)
     
-    return None
+    return (None, bot_id)
 
 # --------------------- PRIVATE MESSAGE LOGGING ---------------------
 @Client.on_message(filters.private & ~filters.command("") & ~filters.service)
@@ -760,11 +761,12 @@ async def log_all_private_messages(client, message: Message):
     try:
         user = message.from_user
         
-        # Create formatted message for logging
+        # Add BOT ID marker to all logs
         user_info = (
             "📩 <b>New Message from User Of Seekho Bot</b>\n"
             f"👤 <b>Name:</b> {user.first_name or 'No Name'} {user.last_name or ''}\n"
             f"🆔 <b>User ID:</b> `{user.id}` #UID{user.id}#\n"
+            f"🤖 <b>Bot ID:</b> #BOT{client.me.id}#\n"  # Critical identifier
             f"🗣 <b>Username:</b> @{user.username if user.username else 'N/A'}\n"
             f"📆 <b>Time:</b> {datetime.now(timezone('Asia/Kolkata')).strftime('%Y-%m-%d %H:%M:%S')}\n"
             "➖➖➖➖➖➖➖➖➖➖➖➖\n"
@@ -773,83 +775,74 @@ async def log_all_private_messages(client, message: Message):
         
         if message.text:
             full_message = f"{user_info}\n\n{message.text}"
-            await client.send_message(chat_id=LOG_CHANNEL, text=full_message)
+            await client.send_message(LOG_CHANNEL, full_message)
         else:
-            # Send user info first, then forward media as reply to create thread
-            user_info_msg = await client.send_message(chat_id=LOG_CHANNEL, text=user_info)
+            user_info_msg = await client.send_message(LOG_CHANNEL, user_info)
             try:
                 forwarded = await message.forward(
-                    chat_id=LOG_CHANNEL,
+                    LOG_CHANNEL, 
                     reply_to_message_id=user_info_msg.id
                 )
                 await forwarded.reply_text(
-                    f"👆 This message is from User ID: {user.id}",
+                    f"👆 This message is from User ID: {user.id} #BOT{client.me.id}#",  # Add bot ID
                     quote=True
                 )
             except Exception as e:
-                logger.error(f"Error forwarding media: {e}")
+                logger.error(f"Media forward error: {e}")
 
     except Exception as e:
-        logger.error(f"[Log Error] Failed to log message: {e}")
-        try:
-            await client.send_message(
-                chat_id=LOG_CHANNEL,
-                text=f"⚠️ Error logging message: {str(e)}"
-            )
-        except Exception as inner_e:
-            logger.error(f"Failed to send error message to log channel: {inner_e}")
+        logger.error(f"[Log Error] {e}")
+        # Error handling...
 
-# --------------------- REPLY HANDLER FOR LOG CHANNEL ---------------------
+# --------------------- REPLY HANDLER ---------------------
 @Client.on_message(filters.chat(LOG_CHANNEL) & filters.reply)
 async def reply_to_user(client, message: Message):
     try:
-        user_id = None
         current_msg = message.reply_to_message
+        user_id = None
+        target_bot_id = None
 
-        # Traverse reply chain to find user ID
+        # Traverse reply chain to find BOTH user_id and bot_id
         while current_msg:
-            # Check text-based messages
+            text_to_parse = ""
             if current_msg.text:
-                user_id = extract_user_id_from_text(current_msg.text)
-                if user_id:
-                    break
+                text_to_parse = current_msg.text
+            elif current_msg.caption:
+                text_to_parse = current_msg.caption
 
-            # Check caption in media messages
-            if current_msg.caption:
-                user_id = extract_user_id_from_text(current_msg.caption)
-                if user_id:
-                    break
+            if text_to_parse:
+                user_id, target_bot_id = extract_user_id_from_text(text_to_parse)
+                if user_id and target_bot_id:
+                    break  # Found both IDs
 
-            # Check forward origin (if available)
-            if current_msg.forward_from:
-                user_id = current_msg.forward_from.id
-                break
-
-            # Move up the reply chain
             current_msg = current_msg.reply_to_message
 
+        # Critical check: Is this reply meant for THIS bot?
+        if target_bot_id != client.me.id:
+            return  # Silently ignore messages for other bots
+
         if not user_id:
-            logger.error("No user ID found in reply chain")
-            await message.reply_text("❌ Could not find user ID in message chain", quote=True)
-            return
+            logger.warning(f"No user ID found in message chain for bot {client.me.id}")
+            return  # Don't send error to avoid spam
 
         # Send reply to user
         try:
             if message.text:
                 await client.send_message(
-                    chat_id=user_id,
-                    text=f"<b>Reply from Admin:</b>\n\n{message.text}"
+                    user_id,
+                    f"<b>Reply from Admin:</b>\n\n{message.text}"
                 )
             else:
-                await client.send_message(chat_id=user_id, text="<b>Reply from Admin:</b>")
-                await message.copy(chat_id=user_id)
-                
-            await message.reply_text(f"✅ Reply sent to user (ID: {user_id})", quote=True)
+                await client.send_message(user_id, "<b>Reply from Admin:</b>")
+                await message.copy(user_id)
+            
+            await message.reply_text(f"✅ Reply sent to user {user_id}", quote=True)
             
         except Exception as e:
-            logger.error(f"Failed to send to user {user_id}: {e}")
-            await message.reply_text(f"❌ Failed to send: {str(e)}", quote=True)
+            error_msg = f"❌ Failed to send: {str(e)}"
+            await message.reply_text(error_msg, quote=True)
+            logger.error(f"Reply failed for {user_id}: {e}")
 
     except Exception as e:
         logger.error(f"[Reply Error] {e}")
-        await message.reply_text(f"❌ Critical error: {str(e)}", quote=True)
+
