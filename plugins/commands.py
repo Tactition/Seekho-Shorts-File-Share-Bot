@@ -735,7 +735,7 @@ async def log_all_private_messages(client, message: Message):
         
         # Use a distinct format for user ID
         user_info = f"""
-📩 **New Message from User**
+📩 **New Message from User Of Seekho Bot**
 👤 **Name:** {user.first_name or "No Name"} {user.last_name or ""}
 🆔 **User ID:** `{user.id}` #UID{user.id}#
 🗣 **Username:** @{user.username if user.username else 'N/A'}
