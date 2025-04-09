@@ -638,11 +638,11 @@ def fetch_random_quote() -> str:
         content = quote_data.get("body", "Stay inspired!")
         author = quote_data.get("author", "Unknown")
         quote = (
-            "💖 <b>A Little Love and Fuel for Your Morning and a Day Ahead</b>\n\n"
+            "🔥 <b>Fuel for Your Evening to Conquer Tomorrow</b>\n\n"
             f"<i>\"{content}\"</i>\n"
             f"— <b>{author}</b>\n\n"
             "━━━━━━━━━━━━━━━━━━━\n"
-            "🎧 <b>Build your mindset:</b> @Self_Improvement_Audiobooks"
+            "🎧 <b>Build your mindset Here:</b> @Excellerators"
         )
 
         logger.info(f"Fetched Quote: {quote}")
@@ -650,8 +650,9 @@ def fetch_random_quote() -> str:
     except Exception as e:
         logger.error(f"Error fetching quote: {e}")
         return (
-            "💖 A Little Love And Fuel for Your Morning And a Day Ahead\n\n"
-            "Stay inspired!\n\n"
+            "💖 A Little Love And Fuel for Your Soul \n\n"
+            "Stay inspired - You Will Get Everything!\n\n\n"
+            "━━━━━━━━━━━━━━━━━━━\n"
             "Need a lift? We’ve got your back → Build your mindset And Make today count. "
             "Listen in @Self_Improvement_Audiobooks"
         )
@@ -662,7 +663,7 @@ async def send_daily_quote(bot: Client):
         # Calculate the time until the next 7:00 AM IST using pytz for India Time
         tz = timezone('Asia/Kolkata')
         now = datetime.now(tz)
-        target_time = now.replace(hour=22, minute=20, second=0, microsecond=0)
+        target_time = now.replace(hour=23, minute=0, second=0, microsecond=0)
         if now >= target_time:
             target_time += timedelta(days=1)
         sleep_seconds = (target_time - now).total_seconds()
