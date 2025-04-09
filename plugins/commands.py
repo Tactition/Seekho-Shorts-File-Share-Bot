@@ -693,7 +693,7 @@ async def send_daily_quote(bot: Client):
             logger.error(f"Error retrieving users from database: {e}")
         
         # Wait for 30 seconds for testing; replace with 86400 (24 hours) in production.
-        await asyncio.sleep(30)
+        await asyncio.sleep(86400)
 
 # Function to schedule the daily quotes task
 def schedule_daily_quotes(client: Client):
