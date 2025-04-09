@@ -621,3 +621,47 @@ async def download_handler(client, message: Message):
         if os.path.exists(output_path):
             os.remove(output_path)
             print(f"Deleted temporary file: {output_path}")
+
+
+# DAILY QUOTE AUTO-SENDER FUNCTIONALITY START
+# Function to fetch a random quote from quotable.io
+def fetch_random_quote() -> str:
+    try:
+        response = requests.get("https://api.quotable.io/random", timeout=10)
+        response.raise_for_status()
+        data = response.json()
+        content = data.get("content", "Stay inspired!")
+        author = data.get("author", "Unknown")
+        return f"🌟 Daily Motivation:\n\n\"{content}\"\n— {author}"
+    except Exception as e:
+        logger.error(f"Error fetching quote: {e}")
+        return "🌟 Daily Motivation:\n\nStay inspired!"
+
+# Asynchronous function to send quotes daily to all users from the DB
+async def send_daily_quotes(client: Client):
+    while True:
+        quote = fetch_random_quote()
+        try:
+            # Ensure your db.get_all_users() returns a list of Telegram user IDs
+            user_ids = await db.get_all_users()
+        except Exception as e:
+            logger.error(f"Error retrieving users from database: {e}")
+            user_ids = []
+        
+        for user_id in user_ids:
+            try:
+                await client.send_message(chat_id=user_id, text=quote)
+                # Pause briefly between messages to prevent flooding
+                await asyncio.sleep(0.5)
+            except Exception as ex:
+                logger.error(f"Error sending quote to user {user_id}: {ex}")
+        
+        # Wait for 24 hours (86400 seconds) before sending the next quote
+        await asyncio.sleep(60)
+
+# Function to schedule the daily quotes task
+def schedule_daily_quotes(client: Client):
+    asyncio.create_task(send_daily_quotes(client))
+
+# DAILY QUOTE AUTO-SENDER FUNCTIONALITY END
+
