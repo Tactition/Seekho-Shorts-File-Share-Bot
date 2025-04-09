@@ -16,6 +16,7 @@ import json
 import base64
 from urllib.parse import quote_plus
 from Zahid.utils.file_properties import get_name, get_hash, get_media_file_size
+from pytz import timezone  # Import pytz to handle India Time (Asia/Kolkata)
 from datetime import date, datetime, timedelta
 import time
 
@@ -635,12 +636,24 @@ def fetch_random_quote() -> str:
         quote_data = data.get("quote", {})
         content = quote_data.get("body", "Stay inspired!")
         author = quote_data.get("author", "Unknown")
-        quote = f"🌟 Daily Motivation:\n\n\"{content}\"\n— {author}"
+        quote = (
+            "💖 A Little Love And Fuel for Your Morning And a Day Ahead\n\n"
+            f"\"{content}\"\n"
+            f"— {author}\n\n"
+            "Need a lift? We’ve got your back → Build your mindset And Make today count. "
+            "Listen in @Self_Improvement_Audiobooks"
+        )
         logger.info(f"Fetched Quote: {quote}")
         return quote
     except Exception as e:
         logger.error(f"Error fetching quote: {e}")
-        return "🌟 Daily Motivation:\n\nStay inspired!"
+        return (
+            "💖 A Little Love And Fuel for Your Morning And a Day Ahead\n\n"
+            "Stay inspired!\n\n"
+            "Need a lift? We’ve got your back → Build your mindset And Make today count. "
+            "Listen in @Self_Improvement_Audiobooks"
+        )
+
 
 async def send_daily_quote(bot: Client):
     while True:
