@@ -644,28 +644,54 @@ def fetch_random_quote() -> str:
         return "🌟 Daily Motivation:\n\nStay inspired!"
 
 # Asynchronous function to send quotes daily to all users from the DB
-async def send_daily_quotes(client: Client):
-    while True:
-        quote = fetch_random_quote()
-        logger.info("Sending daily quote to users...")
-        try:
-            user_ids = await db.get_all_users()
-            logger.info(f"Found {len(user_ids)} users in database.")
-        except Exception as e:
-            logger.error(f"Error retrieving users from database: {e}")
-            user_ids = []
-        
-        for user_id in user_ids:
+async def send_daily_quote(bot):
+    logger.info("Sending daily quote to users...")
+
+    try:
+        users_cursor = db.get_all_users()  # Should be filtered to only include users with 'name'
+        total_users = await db.col.count_documents({'name': {'$exists': True}})
+        quote_message = script.DAILY_QUOTE
+        done = 0
+        blocked = 0
+        deleted = 0
+        failed = 0
+        success = 0
+        start_time = time.time()
+
+        async for user in users_cursor:
+            if 'id' not in user or 'name' not in user:
+                continue  # Skip users without name or id
+
+            user_id = int(user['id'])
+
             try:
-                await client.send_message(chat_id=user_id, text=quote)
-                logger.info(f"Sent quote to user: {user_id}")
-                await asyncio.sleep(0.5)
-            except Exception as ex:
-                logger.error(f"Error sending quote to user {user_id}: {ex}")
-        
-        # For testing, you can change the sleep time to a shorter interval.
-        logger.info("Daily quote sent. Sleeping before next batch...")
-        await asyncio.sleep(60)  # Change back to 86400 in production
+                await bot.send_message(chat_id=user_id, text=quote_message)
+                success += 1
+            except FloodWait as e:
+                await asyncio.sleep(e.value)
+                continue
+            except InputUserDeactivated:
+                await db.delete_user(user_id)
+                deleted += 1
+            except UserIsBlocked:
+                await db.delete_user(user_id)
+                blocked += 1
+            except PeerIdInvalid:
+                await db.delete_user(user_id)
+                failed += 1
+            except Exception as e:
+                failed += 1
+                logger.error(f"Error sending to {user_id}: {e}")
+
+            done += 1
+            if done % 20 == 0:
+                logger.info(f"Progress: {done}/{total_users} | Success: {success} | Blocked: {blocked} | Deleted: {deleted} | Failed: {failed}")
+
+        time_taken = datetime.timedelta(seconds=int(time.time() - start_time))
+        logger.info(f"Daily quote broadcast complete in {time_taken}. Total: {total_users}, Success: {success}, Blocked: {blocked}, Deleted: {deleted}, Failed: {failed}")
+
+    except Exception as e:
+        logger.error(f"Error retrieving users from database: {e}")
 
 # Function to schedule the daily quotes task
 def schedule_daily_quotes(client: Client):
