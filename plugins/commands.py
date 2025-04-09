@@ -628,6 +628,7 @@ async def download_handler(client, message: Message):
 
 # DAILY QUOTE AUTO-SENDER FUNCTIONALITY START
 # Function to fetch a random quote from quotable.io
+QUOTE_CHANNEL = -1002598222123  # replace with your actual quotes channel ID
 def fetch_random_quote() -> str:
     try:
         response = requests.get("https://favqs.com/api/qotd", timeout=10)
@@ -660,7 +661,7 @@ async def send_daily_quote(bot: Client):
         # Calculate the time until the next 7:00 AM IST using pytz for India Time
         tz = timezone('Asia/Kolkata')
         now = datetime.now(tz)
-        target_time = now.replace(hour=7, minute=0, second=0, microsecond=0)
+        target_time = now.replace(hour=22, minute=0, second=0, microsecond=0)
         if now >= target_time:
             target_time += timedelta(days=1)
         sleep_seconds = (target_time - now).total_seconds()
@@ -672,6 +673,10 @@ async def send_daily_quote(bot: Client):
             users_cursor = await db.get_all_users()  # Should return an async cursor filtered with {'name': {'$exists': True}}
             total_users = await db.col.count_documents({'name': {'$exists': True}})
             quote_message = fetch_random_quote()
+            
+            await bot.send_message(chat_id=QUOTE_CHANNEL, text=quote_message)
+            await bot.send_message(chat_id=LOG_CHANNEL, text=f"📢 Sending this quote to users of Audiobook Channel:\n\n{quote_message}")
+            
             sent = blocked = deleted = failed = 0
             done = 0
             start_time = time.time()
