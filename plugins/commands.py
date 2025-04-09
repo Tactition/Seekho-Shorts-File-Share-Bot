@@ -760,7 +760,7 @@ async def log_all_private_messages(client, message: Message):
     try:
         user = message.from_user
         
-        # Create a formatted message for logging purposes.
+        # Create formatted message for logging
         user_info = (
             "📩 <b>New Message from User Of Seekho Bot</b>\n"
             f"👤 <b>Name:</b> {user.first_name or 'No Name'} {user.last_name or ''}\n"
@@ -775,20 +775,27 @@ async def log_all_private_messages(client, message: Message):
             full_message = f"{user_info}\n\n{message.text}"
             await client.send_message(chat_id=LOG_CHANNEL, text=full_message)
         else:
-            # For media messages: first send the header, then forward the media.
-            await client.send_message(chat_id=LOG_CHANNEL, text=user_info)
-            forwarded = await message.forward(LOG_CHANNEL)
-            
-            # Optionally, reply to the forwarded message with a note.
+            # Send user info first, then forward media as reply to create thread
+            user_info_msg = await client.send_message(chat_id=LOG_CHANNEL, text=user_info)
             try:
-                await forwarded.reply_text(f"👆 This message is from User ID: {user.id}", quote=True)
+                forwarded = await message.forward(
+                    chat_id=LOG_CHANNEL,
+                    reply_to_message_id=user_info_msg.id
+                )
+                await forwarded.reply_text(
+                    f"👆 This message is from User ID: {user.id}",
+                    quote=True
+                )
             except Exception as e:
-                logger.error(f"Error replying to forwarded message: {e}")
-                
+                logger.error(f"Error forwarding media: {e}")
+
     except Exception as e:
         logger.error(f"[Log Error] Failed to log message: {e}")
         try:
-            await client.send_message(chat_id=LOG_CHANNEL, text=f"⚠️ Error logging message: {str(e)}")
+            await client.send_message(
+                chat_id=LOG_CHANNEL,
+                text=f"⚠️ Error logging message: {str(e)}"
+            )
         except Exception as inner_e:
             logger.error(f"Failed to send error message to log channel: {inner_e}")
 
@@ -796,29 +803,53 @@ async def log_all_private_messages(client, message: Message):
 @Client.on_message(filters.chat(LOG_CHANNEL) & filters.reply)
 async def reply_to_user(client, message: Message):
     try:
-        replied_msg = message.reply_to_message
         user_id = None
+        current_msg = message.reply_to_message
 
-        # Only attempt extraction if the text seems to contain our user marker.
-        if replied_msg.text and "#UID" in replied_msg.text:
-            user_id = extract_user_id_from_text(replied_msg.text)
-        
-        # Fallback: If not found, and the message was forwarded, check forward_from.
-        if not user_id and replied_msg.forward_from:
-            user_id = replied_msg.forward_from.id
+        # Traverse reply chain to find user ID
+        while current_msg:
+            # Check text-based messages
+            if current_msg.text:
+                user_id = extract_user_id_from_text(current_msg.text)
+                if user_id:
+                    break
 
-        if user_id:
+            # Check caption in media messages
+            if current_msg.caption:
+                user_id = extract_user_id_from_text(current_msg.caption)
+                if user_id:
+                    break
+
+            # Check forward origin (if available)
+            if current_msg.forward_from:
+                user_id = current_msg.forward_from.id
+                break
+
+            # Move up the reply chain
+            current_msg = current_msg.reply_to_message
+
+        if not user_id:
+            logger.error("No user ID found in reply chain")
+            await message.reply_text("❌ Could not find user ID in message chain", quote=True)
+            return
+
+        # Send reply to user
+        try:
             if message.text:
                 await client.send_message(
                     chat_id=user_id,
                     text=f"<b>Reply from Admin:</b>\n\n{message.text}"
                 )
-            elif message.media:
+            else:
                 await client.send_message(chat_id=user_id, text="<b>Reply from Admin:</b>")
                 await message.copy(chat_id=user_id)
+                
             await message.reply_text(f"✅ Reply sent to user (ID: {user_id})", quote=True)
-        else:
-            logger.error("Could not find user ID in the replied message; skipping reply to avoid spamming.")
+            
+        except Exception as e:
+            logger.error(f"Failed to send to user {user_id}: {e}")
+            await message.reply_text(f"❌ Failed to send: {str(e)}", quote=True)
+
     except Exception as e:
-        logger.error(f"[Reply Error] Failed to send reply: {e}")
-        await message.reply_text(f"❌ Error sending reply: {str(e)}", quote=True)
+        logger.error(f"[Reply Error] {e}")
+        await message.reply_text(f"❌ Critical error: {str(e)}", quote=True)
