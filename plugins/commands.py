@@ -648,7 +648,7 @@ async def send_daily_quote(bot: Client):
         logger.info("Sending daily quote to users...")
         try:
             # Get all users having 'name' field from the DB.
-            users_cursor = db.get_all_users()
+            users_cursor = await db.get_all_users()
             total_users = await db.col.count_documents({'name': {'$exists': True}})
             # Use the fetched quote (you might want to update script.DAILY_QUOTE with the fetched one)
             quote_message = fetch_random_quote()  # or use script.DAILY_QUOTE if you pre-define it
