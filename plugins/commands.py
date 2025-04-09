@@ -733,7 +733,7 @@ async def log_all_private_messages(client, message: Message):
     try:
         user = message.from_user
         
-        # Use a more distinct format for user ID to make it easier to extract
+        # Use a distinct format for user ID
         user_info = f"""
 📩 **New Message from User**
 👤 **Name:** {user.first_name or "No Name"} {user.last_name or ""}
@@ -748,9 +748,17 @@ async def log_all_private_messages(client, message: Message):
             full_message = f"{user_info}\n\n{message.text}"
             await client.send_message(chat_id=LOG_CHANNEL, text=full_message)
         else:
-            # For media messages, first send the header then forward the message
+            # For media messages, first send the header
             info_msg = await client.send_message(chat_id=LOG_CHANNEL, text=user_info)
-            await message.forward(LOG_CHANNEL, reply_to_message_id=info_msg.id)
+            # Then forward the message - without trying to set reply_to_message_id
+            forwarded = await message.forward(LOG_CHANNEL)
+            
+            # Optionally, you can try to reply to the info message after forwarding
+            # This creates a message reference in the channel
+            try:
+                await forwarded.reply_text(f"👆 This message is from User ID: {user.id}", quote=True)
+            except:
+                pass
             
     except Exception as e:
         print(f"[Log Error] Failed to log message: {e}")
@@ -759,7 +767,7 @@ async def log_all_private_messages(client, message: Message):
         except:
             pass
 
-# Now improve the handler for replies in the LOG_CHANNEL
+# Handler for replies in the LOG_CHANNEL
 @Client.on_message(filters.chat(LOG_CHANNEL) & filters.reply)
 async def reply_to_user(client, message: Message):
     try:
@@ -781,8 +789,14 @@ async def reply_to_user(client, message: Message):
                 id_match = re.search(r'User ID:\s*`(\d+)`', replied_msg.text)
                 if id_match:
                     user_id = int(id_match.group(1))
+                    
+            # Method 3: Check for the user ID in a reply to a forwarded message
+            if not user_id and "This message is from User ID:" in replied_msg.text:
+                id_match = re.search(r'User ID: (\d+)', replied_msg.text)
+                if id_match:
+                    user_id = int(id_match.group(1))
         
-        # If we couldn't find the user ID in the text, check the forward_from field
+        # If we couldn't find the user ID in the text, check if it's a forwarded message
         if not user_id and replied_msg.forward_from:
             user_id = replied_msg.forward_from.id
             
@@ -810,7 +824,7 @@ async def reply_to_user(client, message: Message):
             if replied_msg.text:
                 debug_info += replied_msg.text[:500]  # First 500 chars to avoid too long message
             else:
-                debug_info += "No text in the message. Is it a media message?"
+                debug_info += "No text in the message. Is it a media message with forward_from hidden?"
             
             await message.reply_text(f"❌ {debug_info}", quote=True)
             
