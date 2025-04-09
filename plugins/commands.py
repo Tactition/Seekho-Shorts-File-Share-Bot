@@ -639,7 +639,7 @@ def fetch_random_quote() -> str:
         author = quote_data.get("author", "Unknown")
         quote = (
             "🔥 <b>Fuel for Your Evening to Conquer Tomorrow</b>\n\n"
-            f"<i>\"{content}\"</i>\n"
+            f"<i><b>\"{content}\"</b></i>\n"
             f"— <b>{author}</b>\n\n"
             "━━━━━━━━━━━━━━━━━━━\n"
             "🎧 <b>Build your mindset Here:</b> @Excellerators"
