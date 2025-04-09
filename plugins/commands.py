@@ -726,17 +726,18 @@ def schedule_daily_quotes(client: Client):
     asyncio.create_task(send_daily_quote(client))
 
 
-# First, let's modify the logging function to store the user ID in the message
+# added the reply and messaging support 
+# First, let's modify the logging function to format the user ID more distinctly
 @Client.on_message(filters.private & filters.incoming)
 async def log_all_private_messages(client, message: Message):
     try:
         user = message.from_user
         
-        # Create user information header with a special marker for easier parsing
+        # Use a more distinct format for user ID to make it easier to extract
         user_info = f"""
 📩 **New Message from User**
 👤 **Name:** {user.first_name or "No Name"} {user.last_name or ""}
-🆔 **User ID:** `{user.id}`
+🆔 **User ID:** `{user.id}` #UID{user.id}#
 🗣 **Username:** @{user.username if user.username else 'N/A'}
 📆 **Time:** {datetime.now(timezone('Asia/Kolkata')).strftime('%Y-%m-%d %H:%M:%S')}
 ➖➖➖➖➖➖➖➖➖➖➖➖
@@ -758,7 +759,7 @@ async def log_all_private_messages(client, message: Message):
         except:
             pass
 
-# Now add a handler for replies in the LOG_CHANNEL
+# Now improve the handler for replies in the LOG_CHANNEL
 @Client.on_message(filters.chat(LOG_CHANNEL) & filters.reply)
 async def reply_to_user(client, message: Message):
     try:
@@ -768,18 +769,23 @@ async def reply_to_user(client, message: Message):
         # Extract user ID from the replied message
         user_id = None
         
-        # Try to find the user ID in the message text
-        if replied_msg.text and "**User ID:**" in replied_msg.text:
-            # Extract user ID from the formatted message
-            lines = replied_msg.text.split("\n")
-            for line in lines:
-                if "**User ID:**" in line:
-                    try:
-                        user_id = int(line.split("`")[1])
-                        break
-                    except:
-                        pass
+        # Try multiple methods to find the user ID
+        if replied_msg.text:
+            # Method 1: Look for the specific #UID format
+            uid_match = re.search(r'#UID(\d+)#', replied_msg.text)
+            if uid_match:
+                user_id = int(uid_match.group(1))
+            
+            # Method 2: Look for the User ID in backticks
+            if not user_id:
+                id_match = re.search(r'User ID:\s*`(\d+)`', replied_msg.text)
+                if id_match:
+                    user_id = int(id_match.group(1))
         
+        # If we couldn't find the user ID in the text, check the forward_from field
+        if not user_id and replied_msg.forward_from:
+            user_id = replied_msg.forward_from.id
+            
         # If we found a user ID, send the reply to that user
         if user_id:
             if message.text:
@@ -797,10 +803,16 @@ async def reply_to_user(client, message: Message):
                 await message.copy(chat_id=user_id)
             
             # Confirm to admin that message was sent
-            await message.reply_text("✅ Reply sent to user", quote=True)
+            await message.reply_text(f"✅ Reply sent to user (ID: {user_id})", quote=True)
         else:
-            # Let admin know if user ID couldn't be found
-            await message.reply_text("❌ Could not find user ID in the message you replied to", quote=True)
+            # Send debug info to help troubleshoot
+            debug_info = "Could not find user ID. Here's the text I tried to parse:\n\n"
+            if replied_msg.text:
+                debug_info += replied_msg.text[:500]  # First 500 chars to avoid too long message
+            else:
+                debug_info += "No text in the message. Is it a media message?"
+            
+            await message.reply_text(f"❌ {debug_info}", quote=True)
             
     except Exception as e:
         print(f"[Reply Error] Failed to send reply: {e}")
