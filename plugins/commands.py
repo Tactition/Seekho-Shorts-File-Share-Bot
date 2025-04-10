@@ -736,142 +736,163 @@ def schedule_daily_quotes(client: Client):
 
 
 
-# articals
+# articals 
+SENT_POSTS_FILE = "sent_posts.json"
+MAX_POSTS_TO_FETCH = 100
+QUILLBOT_API_URL = "https://api.quillbot.com/v1/paraphrase"
 
-API_KEY = "nFABshYokupXkLJLf1v4aalFBTHJk4ex"  # Your APILayer key
-PARAPHRASE_API_URL = "https://api.apilayer.com/paraphraser/v1/rewrite"
+# Initialize sent posts list
+try:
+    with open(SENT_POSTS_FILE, "r") as f:
+        sent_post_ids = json.load(f)
+except (FileNotFoundError, json.JSONDecodeError):
+    sent_post_ids = []
 
-def paraphrase_content(text):
-    """Paraphrase content using APILayer's API"""
+def get_random_unseen_post():
+    """Fetch a random post that hasn't been sent before"""
     try:
-        headers = {"apikey": API_KEY}
-        response = requests.post(
-            PARAPHRASE_API_URL,
-            headers=headers,
-            data=text.encode("utf-8"),
-            timeout=15
-        )
-        response.raise_for_status()
-        return response.json()["rewritten"]
-    except Exception as e:
-        logger.error(f"Paraphrase failed: {str(e)[:200]}")
-        return text  # Return original text if paraphrasing fails
-
-def clean_article_content(content):
-    """Clean content using BeautifulSoup"""
-    soup = BeautifulSoup(content, 'html.parser')
-    
-    # Remove comment sections and links
-    for element in soup.find_all(['a', 'script', 'style', 'footer']):
-        element.decompose()
-        
-    # Remove specific sections
-    for heading in soup.find_all(['h2', 'h3', 'h4']):
-        if 'comment' in heading.text.lower() or 'share' in heading.text.lower():
-            heading.decompose()
-    
-    # Get clean text content without HTML
-    return soup.get_text(separator='\n\n')
-
-def split_content(text, max_length=4096):
-    """Split plain text into chunks"""
-    chunks = []
-    while len(text) > 0:
-        if len(text) <= max_length:
-            chunks.append(text)
-            break
-        
-        # Split at paragraph breaks
-        split_at = text.rfind('\n\n', 0, max_length)
-        if split_at == -1:
-            split_at = text.rfind('. ', 0, max_length)
-        if split_at == -1:
-            split_at = max_length
-        
-        chunks.append(text[:split_at].strip())
-        text = text[split_at:].lstrip()
-    
-    return chunks
-
-def fetch_daily_article() -> list:
-    try:
-        # Get total posts count
-        total_response = requests.head(
-            "https://www.franksonnenbergonline.com/wp-json/wp/v2/posts?per_page=1",
-            timeout=10
-        )
-        total_posts = int(total_response.headers.get("X-WP-Total", 100))
-        
-        # Calculate daily index
-        day_of_year = datetime.now().timetuple().tm_yday
-        daily_index = day_of_year % total_posts
-        
-        # Fetch article
         response = requests.get(
             "https://www.franksonnenbergonline.com/wp-json/wp/v2/posts",
             params={
-                "per_page": 1,
-                "offset": daily_index,
-                "orderby": "date"
+                "per_page": MAX_POSTS_TO_FETCH,
+                "orderby": "date",
+                "order": "desc"
             },
             timeout=15
         )
         response.raise_for_status()
+        posts = response.json()
         
-        article = response.json()[0]
-        raw_content = article['content']['rendered']
+        unseen_posts = [p for p in posts if p['id'] not in sent_post_ids]
         
-        # Clean and paraphrase content
-        cleaned_text = clean_article_content(raw_content)
-        paraphrased_text = paraphrase_content(cleaned_text)
+        if not unseen_posts:
+            sent_post_ids.clear()
+            unseen_posts = posts
+            
+        selected_post = random.choice(unseen_posts)
+        sent_post_ids.append(selected_post['id'])
         
-        # Build header
-        header = (
-            "🔥 <b>AI-Enhanced Wisdom for Your Evening</b>\n\n"
-            f"📖 <b>{html.escape(article['title']['rendered'])}</b>\n\n"
-        )
-        footer = "\n\n━━━━━━━━━━━━━━━━━━━\n🎧 <b>Explore our Empire Here:</b> @Excellerators"
-        
-        # Split content
-        available_space = 4096 - len(header) - len(footer) - 100
-        content_parts = split_content(paraphrased_text, available_space)
-        
-        # Build messages
-        messages = []
-        for i, part in enumerate(content_parts):
-            msg = f"{header if i == 0 else '📖 <b>Continued...</b>'}\n\n{part}"
-            if i == len(content_parts)-1:
-                msg += footer
-            else:
-                msg += "\n\n(Continued...)"
-            messages.append(msg)
-        
-        logger.info(f"Prepared {len(messages)} article parts")
-        return messages
+        with open(SENT_POSTS_FILE, "w") as f:
+            json.dump(sent_post_ids[-MAX_POSTS_TO_FETCH:], f)
+            
+        return selected_post
         
     except Exception as e:
-        logger.error(f"Error fetching article: {e}")
+        logger.error(f"Error fetching posts: {e}")
+        return None
+
+def clean_content(content):
+    """Clean and normalize text content"""
+    # Remove HTML elements
+    soup = BeautifulSoup(content, 'html.parser')
+    for tag in soup(['script', 'style', 'footer', 'aside', 'a', 'div.comments']):
+        tag.decompose()
+        
+    # Get text and clean
+    text = soup.get_text(separator='\n\n')
+    text = re.sub(r'\s+', ' ', text)  # Remove extra whitespace
+    text = re.sub(r'[^\w\s.,!?\-—]', '', text)  # Remove special chars
+    return text.strip()
+
+def paraphrase_content(text):
+    """Paraphrase content using QuillBot with conciseness"""
+    try:
+        chunks = [text[i:i+700] for i in range(0, len(text), 700)]
+        paraphrased = []
+        
+        for chunk in chunks:
+            response = requests.post(
+                QUILLBOT_API_URL,
+                json={
+                    "text": chunk,
+                    "strength": 3,
+                    "formality": "all",
+                    "intent": "concise"
+                },
+                timeout=20
+            )
+            
+            if response.status_code == 200:
+                result = response.json().get("data", {}).get("paraphrased", chunk)
+                paraphrased.append(result)
+            else:
+                paraphrased.append(chunk)
+                
+        return " ".join(paraphrased)[:4000]  # Ensure Telegram limit
+    
+    except Exception as e:
+        logger.error(f"Paraphrase failed: {str(e)[:200]}")
+        return text[:4096]
+
+def split_content(text):
+    """Split text into Telegram-friendly chunks"""
+    chunks = []
+    while len(text) > 0:
+        if len(text) <= 4096:
+            chunks.append(text)
+            break
+            
+        split_at = text.rfind('\n\n', 0, 4096)
+        if split_at == -1:
+            split_at = text.rfind('. ', 0, 4096)
+        if split_at == -1:
+            split_at = 4096
+            
+        chunks.append(text[:split_at].strip())
+        text = text[split_at:].lstrip()
+        
+    return chunks
+
+def fetch_daily_article() -> list:
+    try:
+        post = get_random_unseen_post()
+        if not post:
+            raise Exception("No new posts available")
+            
+        raw_content = post['content']['rendered']
+        cleaned_text = clean_content(raw_content)
+        paraphrased_text = paraphrase_content(cleaned_text)
+        
+        header = (
+            "🔥 <b>Daily Wisdom</b>\n\n"
+            f"📖 <b>{html.escape(post['title']['rendered'])}</b>\n\n"
+        )
+        footer = "\n\n━━━━━━━━━━━━━━━━━━━\n🎧 Explore more: @Excellerators"
+        
+        full_content = f"{header}{paraphrased_text}{footer}"
+        content_parts = split_content(full_content)
+        
+        # Add continuation markers
+        for i in range(len(content_parts)-1):
+            content_parts[i] += "\n\n(Continued...)"
+        content_parts[-1] += footer
+        
+        logger.info(f"Prepared {len(content_parts)} article parts")
+        return content_parts
+        
+    except Exception as e:
+        logger.error(f"Error: {e}")
         return [
             "💖 Daily Inspiration Coming Soon!\n\n"
-            "Stay tuned for tomorrow's AI-enhanced wisdom!\n\n"
+            "Stay tuned for tomorrow's wisdom!\n\n"
             "━━━━━━━━━━━━━━━━━━━\n"
-            "Need immediate motivation? Visit @Self_Improvement_Audiobooks"
+            "Need motivation? Visit @Self_Improvement_Audiobooks"
         ]
 
 async def send_daily_article(bot: Client):
     while True:
         tz = timezone('Asia/Kolkata')
         now = datetime.now(tz)
-        target_time = now.replace(hour=1, minute=50, second=0, microsecond=0)
+        target_time = now.replace(hour=2, minute=40, second=0, microsecond=0)
         
         if now >= target_time:
             target_time += timedelta(days=1)
             
         sleep_seconds = (target_time - now).total_seconds()
-        logger.info(f"Sleeping for {sleep_seconds:.1f} seconds until 11 PM IST")
+        logger.info(f"Sleeping for {sleep_seconds:.1f} seconds until scheduled time")
         await asyncio.sleep(sleep_seconds)
 
-        logger.info("11:00 PM IST - Sending article...")
+        logger.info("Sending daily article...")
         try:
             article_messages = fetch_daily_article()
             
@@ -887,7 +908,7 @@ async def send_daily_article(bot: Client):
             
             await bot.send_message(
                 chat_id=LOG_CHANNEL,
-                text=f"✅ Successfully sent {len(article_messages)} AI-enhanced articles"
+                text=f"✅ Successfully sent {len(article_messages)} articles"
             )
 
         except Exception as e:
