@@ -27,6 +27,7 @@ import socket
 import ssl
 import urllib.parse
 import requests
+from bs4 import BeautifulSoup
 
 
 logger = logging.getLogger(__name__)
@@ -832,3 +833,103 @@ async def send_daily_article(bot: Client):
 def schedule_daily_articles(client: Client):
     asyncio.create_task(send_daily_article(client))
 
+
+#articals
+
+def fetch_daily_article() -> str:
+    try:
+        # Get total posts count
+        total_response = requests.head(
+            "https://www.franksonnenbergonline.com/wp-json/wp/v2/posts?per_page=1"
+        )
+        total_posts = int(total_response.headers.get("X-WP-Total", 100))
+        
+        # Calculate daily index using day of year
+        day_of_year = datetime.now().timetuple().tm_yday
+        daily_index = day_of_year % total_posts
+        
+        # Fetch the specific article for today
+        response = requests.get(
+            "https://www.franksonnenbergonline.com/wp-json/wp/v2/posts",
+            params={
+                "per_page": 1,
+                "offset": daily_index,
+                "orderby": "date",
+                "_embed": 1
+            },
+            timeout=15
+        )
+        response.raise_for_status()
+        
+        article = response.json()[0]
+        title = html.escape(article['title']['rendered'])
+        
+        # Process full content
+        raw_content = article['content']['rendered']
+        soup = BeautifulSoup(raw_content, 'html.parser')
+        
+        # Clean and format content
+        cleaned_content = soup.get_text(separator='\n\n', strip=True)
+        cleaned_content = html.escape(cleaned_content)
+        
+        # Truncate to Telegram's 4096 character limit with buffer
+        
+        max_length = 3000  # Leaving space for our header/footer
+        if len(cleaned_content) > max_length:
+            cleaned_content = cleaned_content[:max_length].rsplit(' ', 1)[0] + '...'
+
+        message = (
+            "🔥 <b>Fuel for Your Evening to Conquer Tomorrow</b>\n\n"
+            f"📖 <b>{title}</b>\n\n"
+            f"{cleaned_content}\n\n"
+            "━━━━━━━━━━━━━━━━━━━\n"
+            "🎧 <b>Explore our Empire Here:</b> @Excellerators"
+        )
+
+        logger.info(f"Fetched Full Article: {title[:50]}...")  # Truncate long titles for logs
+        return message
+        
+    except Exception as e:
+        logger.error(f"Error fetching article: {e}")
+        return (
+            "💖 A Little Love And Fuel for Your Soul \n\n"
+            "Stay inspired - You Will Get Everything!\n\n"
+            "━━━━━━━━━━━━━━━━━━━\n"
+            "Need a lift? We’ve got your back → Build your mindset And Make today count. "
+            "Listen in @Self_Improvement_Audiobooks"
+        )
+
+async def send_daily_article(bot: Client):
+    while True:
+        tz = timezone('Asia/Kolkata')
+        now = datetime.now(tz)
+        target_time = now.replace(hour=23, minute=21, second=0, microsecond=0)
+        
+        if now >= target_time:
+            target_time += timedelta(days=1)
+            
+        sleep_seconds = (target_time - now).total_seconds()
+        logger.info(f"Sleeping for {sleep_seconds:.1f} seconds until next 11 PM IST")
+        await asyncio.sleep(sleep_seconds)
+
+        logger.info("11:00 PM IST - Sending daily article...")
+        try:
+            article_message = fetch_daily_article()
+            
+            await bot.send_message(chat_id=QUOTE_CHANNEL, text=article_message)
+            await bot.send_message(
+                chat_id=LOG_CHANNEL,
+                text=f"📢 Article sent to channel:\n\n{article_message}"
+            )
+
+        except Exception as e:
+            logger.error(f"Send error: {str(e)[:100]}")  # Truncate long errors
+            await bot.send_message(
+                chat_id=LOG_CHANNEL,
+                text=f"❌ Article failed: {str(e)[:200]}"
+            )
+
+        await asyncio.sleep(86400)  # 24-hour cooldown
+
+def schedule_daily_articles(client: Client):
+    asyncio.create_task(send_daily_article(client))
