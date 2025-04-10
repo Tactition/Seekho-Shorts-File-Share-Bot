@@ -52,9 +52,10 @@ async def log_all_private_messages(client, message: Message):
         
         # Build metadata with both UID and BOT markers
         user_info = (
-            "📩 <b>New Message from User</b>\n"
+            "📩 <b>New Message from User Seekho Bot</b>\n"
             f"👤 <b>Name:</b> {user.first_name or 'N/A'} {user.last_name or ''}\n"
             f"🆔 <b>User ID:</b> `{user.id}` #UID{user.id}#\n"
+            f"🤖 <b>Bot Name:</b> {client.me.username}\n"  # Add this line
             f"🤖 <b>Bot ID:</b> #BOT{client.me.id}#\n"
             f"📱 <b>Username:</b> @{user.username or 'N/A'}\n"
             f"⏰ <b>Time:</b> {datetime.now(timezone('Asia/Kolkata')).strftime('%Y-%m-%d %H:%M:%S')}\n"
