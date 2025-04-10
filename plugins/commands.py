@@ -810,7 +810,8 @@ async def send_philosophy_articles(bot: Client):
             await bot.send_message(chat_id=LOG_CHANNEL, text=summary, parse_mode='HTML')
         except Exception as e:
             logger.error(f"Error retrieving users from database: {e}")
-            await bot.send_message(chat_id=LOG_CHANNEL, text=f"Error retrieving users: {e}", parse_mode='HTML')
+            await bot.send_message(chat_id=user_id, text=quote_message, parse_mode='html')
+
         
         await asyncio.sleep(60)
 
