@@ -738,10 +738,10 @@ def schedule_daily_quotes(client: Client):
 
 # articals sending procedeur
 
+# articals sending procedeur
 SENT_POSTS_FILE = "sent_posts.json"
 MAX_POSTS_TO_FETCH = 100
 QUILLBOT_API_URL = "https://api.quillbot.com/v1/paraphrase"
-
 
 # Initialize sent posts list
 try:
@@ -802,10 +802,10 @@ def clean_content(content):
     
     # Normalize text
     text = re.sub(r'\s+', ' ', text)
-    return text.strip()
+    return text[:5000]  # Initial length cap
 
 def paraphrase_content(text):
-    """Create concise version using QuillBot"""
+    """Create concise, motivational version"""
     try:
         response = requests.post(
             QUILLBOT_API_URL,
@@ -813,7 +813,7 @@ def paraphrase_content(text):
                 "text": text[:3000],
                 "strength": 3,
                 "formality": "formal",
-                "intent": "concise"
+                "intent": "mainpoints"
             },
             timeout=20
         )
@@ -824,52 +824,53 @@ def paraphrase_content(text):
         logger.error(f"Paraphrase failed: {str(e)[:200]}")
         return text[:3000]
 
-def extract_action_points(text):
-    """Extract dynamic action points from paraphrased content"""
-    # Find imperative sentences
-    sentences = re.split(r'(?<=[.!?]) +', text)
-    action_points = [
-        s.strip() for s in sentences 
-        if s.startswith(('Try', 'Focus', 'Prioritize', 'Avoid', 'Implement')) 
-        and len(s) < 120
-    ][:3]
+def build_structured_message(title, content):
+    """Create formatted message with all sections"""
+    # Main content (2000-3000 characters)
+    main_body = f"📖 <b>{html.escape(title)}</b>\n\n{content[:3000]}\n\n"
     
-    # Format as bullets
-    if not action_points:
-        return [
-            "➖ Focus on high-impact tasks",
-            "➖ Review priorities daily",
-            "➖ Eliminate distractions"
-        ]
-        
-    return [f"➖ {p.rstrip('.!')}" for p in action_points]
-
-def build_structured_message(title, main_content, raw_content, paraphrased):
-    """Create formatted message with dynamic sections"""
-    # Extract action points
-    action_points = extract_action_points(paraphrased)
+    # Actionable advice section
+    advice = (
+        "💪 <b>Actionable Steps:</b>\n"
+        "➖ Prioritize tasks using Eisenhower Matrix\n"
+        "➖ Delegate non-essential activities\n"
+        "➖ Focus on 2-3 key tasks daily\n"
+        "➖ Review priorities weekly\n\n"
+    )
     
-    # Build main message
-    message = (
-        f"📖 <b>{html.escape(title)}</b>\n\n"
-        f"{paraphrased[:800]}\n\n"
-        "💡 <b>Key Actions:</b>\n"
-        f"{chr(10).join(action_points)}\n\n"
-        "🌟 <i>Remember:</i> Small consistent steps lead to big changes!\n\n"
+    # Motivational closing
+    closing = (
+        "🌟 <i>Remember:</i> Productivity is about impact, "
+        "not just activity!\n\n"
         "━━━━━━━━━━━━━━━━━━━\n"
         "🎧 Deep dives: @Excellerators"
     )
     
-    # Log details
-    log_entry = (
-        "📄 <b>Original Content:</b>\n"
-        f"<pre>{raw_content[:1000]}</pre>\n\n"
-        "🔄 <b>Processed Content:</b>\n"
-        f"<pre>{paraphrased[:1000]}</pre>"
-    )
+    full_message = main_body + advice + closing
+    return full_message.strip()
+
+def split_content(text):
+    """Split long messages into Telegram-friendly parts"""
+    parts = []
+    while len(text) > 0:
+        if len(text) <= 4096:
+            parts.append(text)
+            break
+            
+        # Prefer splitting at section breaks
+        split_at = text.rfind('\n\n', 0, 4096)
+        if split_at == -1:
+            split_at = 4096
+            
+        parts.append(text[:split_at].strip() + "\n\n(Continued...)")
+        text = "🔥 Continued:\n\n" + text[split_at:].lstrip()
     
-    # Enforce length limits
-    return message[:1400], log_entry
+    # Add footer to last part
+    if len(parts) > 1:
+        parts[-1] = parts[-1].replace("(Continued...)", "") + \
+            "\n\n━━━━━━━━━━━━━━━━━━━\n🎧 Deep dives: @Excellerators"
+    
+    return parts
 
 def fetch_daily_article() -> list:
     try:
@@ -878,22 +879,14 @@ def fetch_daily_article() -> list:
             raise Exception("No new posts available")
             
         raw_content = post['content']['rendered']
+        
+        # Process content
         cleaned = clean_content(raw_content)
         paraphrased = paraphrase_content(cleaned)
+        formatted = build_structured_message(post['title']['rendered'], paraphrased)
         
-        title = html.escape(post['title']['rendered'])
-        final_message, log_data = build_structured_message(title, cleaned, raw_content, paraphrased)
-        
-        # Send logs
-        asyncio.create_task(
-            bot.send_message(
-                chat_id=LOG_CHANNEL,
-                text=log_data,
-                parse_mode=enums.ParseMode.HTML
-            )
-        )
-        
-        return [final_message]
+        # Split if needed
+        return split_content(formatted)
         
     except Exception as e:
         logger.error(f"Article error: {e}")
@@ -907,7 +900,7 @@ async def send_daily_article(bot: Client):
     while True:
         tz = timezone('Asia/Kolkata')
         now = datetime.now(tz)
-        target_time = now.replace(hour=3, minute=40, second=0, microsecond=0)
+        target_time = now.replace(hour=3, minute=50, second=0, microsecond=0)
         
         if now >= target_time:
             target_time += timedelta(days=1)
@@ -920,18 +913,19 @@ async def send_daily_article(bot: Client):
         try:
             messages = fetch_daily_article()
             
-            for msg in messages:
+            for i, msg in enumerate(messages):
                 await bot.send_message(
                     chat_id=QUOTE_CHANNEL,
                     text=msg,
                     parse_mode=enums.ParseMode.HTML,
                     disable_web_page_preview=True
                 )
-                await asyncio.sleep(1)
+                if i < len(messages)-1:
+                    await asyncio.sleep(1)
             
             await bot.send_message(
                 chat_id=LOG_CHANNEL,
-                text=f"✅ Successfully sent daily article"
+                text=f"✅ Successfully sent {len(messages)} message parts"
             )
 
         except Exception as e:
