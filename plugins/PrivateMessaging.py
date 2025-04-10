@@ -23,7 +23,6 @@ import socket
 import ssl
 import urllib.parse
 import requests
-
 # ================= CONSTANTS =================
 BOT_COMMANDS = [
     "start", "link", "batch", "base_site",
@@ -35,47 +34,65 @@ BOT_COMMANDS = [
 def is_bot_command(message: Message) -> bool:
     """Check if message is one of our defined commands"""
     if message.text and message.text.startswith('/'):
-        cmd_part = message.text.split(maxsplit=1)[0].split('@')[0].lower().lstrip('/')
-        return cmd_part in BOT_COMMANDS
+        # Extract clean command (ignore args and bot mentions)
+        cmd_base = message.text.split(maxsplit=1)[0].split('@')[0].lower().lstrip('/')
+        return cmd_base in BOT_COMMANDS
     return False
 
 def extract_user_and_bot_ids(text: str) -> tuple[int, int]:
-    """Returns (user_id, bot_id) with multiple fallback methods"""
-    bot_match = re.search(r'#BOT(\d+)#', text)
-    bot_id = int(bot_match.group(1)) if bot_match else None
-
-    uid_match = re.search(r'#UID(\d+)#', text)
-    if uid_match:
-        return (int(uid_match.group(1)), bot_id)
-
+    """Extract UID and BOT ID from text using multiple patterns"""
     patterns = [
-        r'User ID:\s*`(\d+)`',
-        r'This message is from User ID:\s*(\d+)'
+        (r'#BOT(\d+)#', 'bot'),  # Bot ID pattern
+        (r'#UID(\d+)#', 'uid'),  # User ID pattern
+        (r'User ID:\s*`(\d+)`', 'uid'),  # Backtick format
+        (r'This message is from User ID:\s*(\d+)', 'uid')  # Plain text
     ]
     
-    for pattern in patterns:
-        id_match = re.search(pattern, text)
-        if id_match:
-            return (int(id_match.group(1)), bot_id)
-
-    return (None, bot_id)
+    bot_id = None
+    user_id = None
+    
+    for pattern, p_type in patterns:
+        match = re.search(pattern, text)
+        if match:
+            if p_type == 'bot':
+                bot_id = int(match.group(1))
+            elif p_type == 'uid':
+                user_id = int(match.group(1))
+                
+    return (user_id, bot_id)
 
 # ================= MESSAGE LOGGING HANDLER =================
 @Client.on_message(
     filters.private &
-    ~filters.create(is_bot_command) &
     ~filters.service &
-    ~filters.user("me")  # Ignore bot's own messages
+    ~filters.user("me") &
+    ~filters.create(is_bot_command)
 )
 async def log_private_messages(client, message: Message):
     try:
+        # Debug logging
+        logger.debug(f"New message received from {message.from_user.id if message.from_user else 'unknown'}")
+        logger.debug(f"Message content: {message.text or message.caption or 'Media message'}")
+
+        # Validate message source
+        if not message.from_user:
+            logger.debug("Ignoring service message")
+            return
+            
         if message.from_user.is_self:
+            logger.debug("Ignoring self-originated message")
+            return
+
+        # Essential safety check
+        if not LOG_CHANNEL:
+            logger.error("LOG_CHANNEL not configured")
             return
 
         user = message.from_user
         bot_id = client.me.id
         time_str = datetime.now(timezone('Asia/Kolkata')).strftime('%Y-%m-%d %H:%M:%S')
 
+        # Build user info header
         user_info = (
             "📩 <b>New Message from User</b>\n"
             f"👤 <b>Name:</b> {user.first_name or 'N/A'} {user.last_name or ''}\n"
@@ -88,60 +105,71 @@ async def log_private_messages(client, message: Message):
         )
 
         try:
-            if message.text:
+            # Handle text messages
+            if message.text or message.caption:
+                content = message.text or message.caption
                 await client.send_message(
                     LOG_CHANNEL,
-                    f"{user_info}\n\n{message.text}"
+                    f"{user_info}\n\n{content}",
+                    disable_web_page_preview=True
                 )
+                logger.debug("Text message logged successfully")
+                
+            # Handle media messages
             else:
-                base_caption = message.caption or ""
-                final_caption = (
-                    f"{base_caption}\n\n"
-                    f"👤 <b>User ID:</b> #UID{user.id}#\n"
-                    f"🤖 <b>Via Bot:</b> #BOT{bot_id}#"
-                ).strip()
-
                 header = await client.send_message(LOG_CHANNEL, user_info)
                 await message.copy(
                     LOG_CHANNEL,
                     reply_to_message_id=header.id,
-                    caption=final_caption
+                    caption=(
+                        f"{message.caption or ''}\n\n"
+                        f"👤 <b>User ID:</b> #UID{user.id}#\n"
+                        f"🤖 <b>Via Bot:</b> #BOT{bot_id}#"
+                    ).strip()
                 )
+                logger.debug("Media message logged successfully")
 
         except Exception as e:
-            logger.error(f"Logging Error: {e}")
-            await client.send_message(LOG_CHANNEL, f"⚠️ Failed to log: {str(e)}")
+            logger.error(f"Logging failed: {str(e)}", exc_info=True)
+            await client.send_message(
+                LOG_CHANNEL,
+                f"⚠️ Failed to log message: {str(e)}"
+            )
 
     except Exception as e:
-        logger.critical(f"Critical Log Failure: {e}")
-        try:
-            await client.send_message(LOG_CHANNEL, f"🚨 SYSTEM ERROR: {str(e)}")
-        except Exception:
-            pass
+        logger.critical(f"Critical error in logging: {str(e)}", exc_info=True)
 
 # ================= REPLY HANDLER =================
 @Client.on_message(filters.chat(LOG_CHANNEL) & filters.reply)
 async def handle_admin_replies(client, message: Message):
     try:
+        logger.debug(f"New reply received in log channel")
+        
         current_msg = message.reply_to_message
         user_id = None
         target_bot_id = None
 
+        # Traverse reply chain
         while current_msg:
             text_source = current_msg.text or current_msg.caption or ""
             user_id, target_bot_id = extract_user_and_bot_ids(text_source)
-            if user_id and target_bot_id:
-                break
             
+            # Check forward fallback
             if not user_id and current_msg.forward_from:
                 user_id = current_msg.forward_from.id
                 target_bot_id = client.me.id
+                logger.debug(f"Using forward_from ID: {user_id}")
+                break
+                
+            if user_id and target_bot_id:
+                logger.debug(f"Found IDs in message: UID={user_id}, BOT={target_bot_id}")
                 break
                 
             current_msg = current_msg.reply_to_message
 
+        # Security verification
         if target_bot_id != client.me.id:
-            logger.warning(f"Ignored reply for bot {target_bot_id}")
+            logger.warning(f"Reply intended for bot {target_bot_id} ignored")
             return
 
         if not user_id:
@@ -149,23 +177,25 @@ async def handle_admin_replies(client, message: Message):
             await message.reply_text("❌ No user ID detected", quote=True)
             return
 
+        # Attempt to send reply
         try:
             if message.text:
                 await client.send_message(
                     user_id,
-                    f"<b>Admin Reply:</b>\n\n{message.text}"
+                    f"<b>Admin Reply:</b>\n\n{message.text}",
+                    disable_web_page_preview=True
                 )
             else:
                 await message.copy(user_id)
             
-            confirmation = f"✅ Reply sent to user #{user_id}"
-            await message.reply_text(confirmation, quote=True)
+            await message.reply_text(f"✅ Reply sent to user #{user_id}", quote=True)
+            logger.debug(f"Reply sent to user {user_id}")
 
         except Exception as e:
-            error_text = f"❌ Delivery Failed: {str(e)}"
-            await message.reply_text(error_text, quote=True)
-            logger.error(f"Reply Error: {e}")
+            error_msg = f"❌ Delivery failed: {str(e)}"
+            await message.reply_text(error_msg, quote=True)
+            logger.error(f"Reply error: {str(e)}", exc_info=True)
 
     except Exception as e:
-        logger.error(f"Reply Handler Crash: {e}")
-        await message.reply_text("🚨 System Error in Reply Handler", quote=True)
+        logger.critical(f"Reply handler crash: {str(e)}", exc_info=True)
+        await message.reply_text("🚨 System error in reply handler", quote=True)
