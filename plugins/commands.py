@@ -836,7 +836,31 @@ def schedule_daily_articles(client: Client):
 
 #articals
 
-def fetch_daily_article() -> str:
+def split_content(content, max_length=4096):
+    """Split HTML content into chunks without breaking tags"""
+    chunks = []
+    while len(content) > 0:
+        if len(content) <= max_length:
+            chunks.append(content)
+            break
+        
+        # Find last valid split point before max_length
+        split_at = max_length
+        while split_at > 0 and content[split_at] != '>' and not content[split_at:].startswith('</'):
+            split_at -= 1
+        
+        # Fallback if no valid split found
+        if split_at == 0:
+            split_at = max_length
+            while split_at > 0 and not content[split_at-1].isspace():
+                split_at -= 1
+        
+        chunks.append(content[:split_at])
+        content = content[split_at:]
+    
+    return chunks
+
+def fetch_daily_article() -> list:
     try:
         # Get total posts count
         total_response = requests.head(
@@ -844,18 +868,17 @@ def fetch_daily_article() -> str:
         )
         total_posts = int(total_response.headers.get("X-WP-Total", 100))
         
-        # Calculate daily index using day of year
+        # Calculate daily index
         day_of_year = datetime.now().timetuple().tm_yday
         daily_index = day_of_year % total_posts
         
-        # Fetch the specific article for today
+        # Fetch article
         response = requests.get(
             "https://www.franksonnenbergonline.com/wp-json/wp/v2/posts",
             params={
                 "per_page": 1,
                 "offset": daily_index,
-                "orderby": "date",
-                "_embed": 1
+                "orderby": "date"
             },
             timeout=15
         )
@@ -863,67 +886,87 @@ def fetch_daily_article() -> str:
         
         article = response.json()[0]
         title = html.escape(article['title']['rendered'])
-        
-        # Process full content
-        raw_content = article['content']['rendered']
-        soup = BeautifulSoup(raw_content, 'html.parser')
-        
-        # Clean and format content
-        cleaned_content = soup.get_text(separator='\n\n', strip=True)
-        cleaned_content = html.escape(cleaned_content)
-        
-        # Truncate to Telegram's 4096 character limit with buffer
-        
-        max_length = 3000  # Leaving space for our header/footer
-        if len(cleaned_content) > max_length:
-            cleaned_content = cleaned_content[:max_length].rsplit(' ', 1)[0] + '...'
+        content = article['content']['rendered']
+        link = article['link']
 
-        message = (
+        # Build header and footer
+        header = (
             "🔥 <b>Fuel for Your Evening to Conquer Tomorrow</b>\n\n"
             f"📖 <b>{title}</b>\n\n"
-            f"{cleaned_content}\n\n"
-            "━━━━━━━━━━━━━━━━━━━\n"
+        )
+        footer = (
+            "\n\n━━━━━━━━━━━━━━━━━━━\n"
             "🎧 <b>Explore our Empire Here:</b> @Excellerators"
         )
+        link_footer = f"\n\n🔗 Full Article: {link}"  # Optional link at end
 
-        logger.info(f"Fetched Full Article: {title[:50]}...")  # Truncate long titles for logs
-        return message
+        # Split content into manageable parts
+        available_space = 4096 - len(header) - len(footer) - 100  # Buffer
+        content_parts = split_content(content, available_space)
+        
+        # Build message parts
+        messages = []
+        for i, part in enumerate(content_parts):
+            if i == 0:
+                msg = f"{header}{part}"
+            else:
+                msg = f"📖 <b>Continued...</b>\n\n{part}"
+            
+            if i == len(content_parts)-1:
+                msg += f"{footer}{link_footer}"
+            else:
+                msg += "\n\n(Continued...)"
+            
+            messages.append(msg)
+
+        logger.info(f"Prepared {len(messages)} article parts")
+        return messages
         
     except Exception as e:
         logger.error(f"Error fetching article: {e}")
-        return (
+        return [
             "💖 A Little Love And Fuel for Your Soul \n\n"
             "Stay inspired - You Will Get Everything!\n\n"
             "━━━━━━━━━━━━━━━━━━━\n"
             "Need a lift? We’ve got your back → Build your mindset And Make today count. "
             "Listen in @Self_Improvement_Audiobooks"
-        )
+        ]
 
 async def send_daily_article(bot: Client):
     while True:
         tz = timezone('Asia/Kolkata')
         now = datetime.now(tz)
-        target_time = now.replace(hour=23, minute=21, second=0, microsecond=0)
+        target_time = now.replace(hour=23, minute=38, second=0, microsecond=0)
         
         if now >= target_time:
             target_time += timedelta(days=1)
             
         sleep_seconds = (target_time - now).total_seconds()
-        logger.info(f"Sleeping for {sleep_seconds:.1f} seconds until next 11 PM IST")
+        logger.info(f"Sleeping for {sleep_seconds:.1f} seconds until 11 PM IST")
         await asyncio.sleep(sleep_seconds)
 
-        logger.info("11:00 PM IST - Sending daily article...")
+        logger.info("11:00 PM IST - Sending article...")
         try:
-            article_message = fetch_daily_article()
+            article_messages = fetch_daily_article()
             
-            await bot.send_message(chat_id=QUOTE_CHANNEL, text=article_message)
-            await bot.send_message(
-                chat_id=LOG_CHANNEL,
-                text=f"📢 Article sent to channel:\n\n{article_message}"
-            )
+            # Send all parts sequentially
+            for i, msg in enumerate(article_messages):
+                await bot.send_message(
+                    chat_id=QUOTE_CHANNEL,
+                    text=msg,
+                    parse_mode="HTML",
+                    disable_web_page_preview=True
+                )
+                if i < len(article_messages)-1:  # Pause between parts
+                    await asyncio.sleep(1)
+            
+            # Log completion
+            log_msg = f"📢 Sent {len(article_messages)} part article"
+            await bot.send_message(LOG_CHANNEL, log_msg)
+            logger.info(f"Sent {len(article_messages)} parts")
 
         except Exception as e:
-            logger.error(f"Send error: {str(e)[:100]}")  # Truncate long errors
+            logger.error(f"Send error: {str(e)[:100]}")
             await bot.send_message(
                 chat_id=LOG_CHANNEL,
                 text=f"❌ Article failed: {str(e)[:200]}"
