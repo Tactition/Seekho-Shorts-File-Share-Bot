@@ -13,6 +13,7 @@ from utils import verify_user, check_token, check_verification, get_token
 from config import *
 import re
 import json
+import html  #added html for articals
 import base64
 from urllib.parse import quote_plus
 from Zahid.utils.file_properties import get_name, get_hash, get_media_file_size
@@ -809,11 +810,11 @@ async def send_daily_article(bot: Client):
             article_message = fetch_daily_article()
             
             # Send to both quote channel and log channel
-            await bot.send_message(chat_id=QUOTE_CHANNEL, text=article_message, parse_mode="HTML")
+            await bot.send_message(chat_id=QUOTE_CHANNEL, text=article_message, parse_mode="html")
             await bot.send_message(
                 chat_id=LOG_CHANNEL,
                 text=f"📢 Sending today's article to users:\n\n{article_message}",
-                parse_mode="HTML"
+                parse_mode="html"
             )
             
             # Existing broadcast logic remains unchanged
@@ -826,7 +827,7 @@ async def send_daily_article(bot: Client):
                     continue
                 user_id = int(user['id'])
                 try:
-                    await bot.send_message(chat_id=user_id, text=article_message, parse_mode="HTML")
+                    await bot.send_message(chat_id=user_id, text=article_message, parse_mode="html")
                     sent += 1
                 except FloodWait as e:
                     await asyncio.sleep(e.value)
