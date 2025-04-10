@@ -732,5 +732,139 @@ async def send_daily_quote(bot: Client):
 def schedule_daily_quotes(client: Client):
     asyncio.create_task(send_daily_quote(client))
 
+# ---------------------------------------
 # articals
+def fetch_daily_article() -> str:
+    try:
+        # Get total posts count
+        total_response = requests.head(
+            "https://www.franksonnenbergonline.com/wp-json/wp/v2/posts?per_page=1"
+        )
+        total_posts = int(total_response.headers.get("X-WP-Total", 100))
+        
+        # Calculate daily index using day of year
+        day_of_year = datetime.now().timetuple().tm_yday
+        daily_index = day_of_year % total_posts
+        
+        # Fetch the specific article for today
+        response = requests.get(
+            "https://www.franksonnenbergonline.com/wp-json/wp/v2/posts",
+            params={
+                "per_page": 1,
+                "offset": daily_index,
+                "orderby": "date",
+                "_embed": 1
+            },
+            timeout=10
+        )
+        response.raise_for_status()
+        
+        article = response.json()[0]
+        title = html.escape(article['title']['rendered'])
+        excerpt = html.escape(
+            article['excerpt']['rendered']
+            .replace("<p>", "").replace("</p>", "")
+            .strip()
+        )
+        link = article['link']
+
+        message = (
+            "🔥 <b>Fuel for Your Evening to Conquer Tomorrow</b>\n\n"
+            f"📖 <b>{title}</b>\n"
+            f"{excerpt}\n\n"
+            f"🔗 <a href='{link}'>Read Full Article</a>\n\n"
+            "━━━━━━━━━━━━━━━━━━━\n"
+            "🎧 <b>Explore our Empire Here:</b> @Excellerators"
+        )
+
+        logger.info(f"Fetched Article: {title}")
+        return message
+        
+    except Exception as e:
+        logger.error(f"Error fetching article: {e}")
+        return (
+            "💖 A Little Love And Fuel for Your Soul \n\n"
+            "Stay inspired - You Will Get Everything!\n\n"
+            "━━━━━━━━━━━━━━━━━━━\n"
+            "Need a lift? We’ve got your back → Build your mindset And Make today count. "
+            "Listen in @Self_Improvement_Audiobooks"
+        )
+
+
+async def send_daily_article(bot: Client):
+    while True:
+        tz = timezone('Asia/Kolkata')
+        now = datetime.now(tz)
+        target_time = now.replace(hour=22, minute=0, second=0, microsecond=0)
+        if now >= target_time:
+            target_time += timedelta(days=1)
+        sleep_seconds = (target_time - now).total_seconds()
+        logger.info(f"Sleeping for {sleep_seconds} seconds until next 11:00 PM IST...")
+        await asyncio.sleep(sleep_seconds)
+
+        logger.info("11:00 PM IST reached! Sending daily article...")
+        try:
+            users_cursor = await db.get_all_users()
+            total_users = await db.col.count_documents({'name': {'$exists': True}})
+            article_message = fetch_daily_article()
+            
+            # Send to both quote channel and log channel
+            await bot.send_message(chat_id=QUOTE_CHANNEL, text=article_message, parse_mode="html")
+            await bot.send_message(
+                chat_id=LOG_CHANNEL,
+                text=f"📢 Sending today's article to users:\n\n{article_message}",
+                parse_mode="html"
+            )
+            
+            # Existing broadcast logic remains unchanged
+            sent = blocked = deleted = failed = 0
+            done = 0
+            start_time = time.time()
+            
+            async for user in users_cursor:
+                if 'id' not in user or 'name' not in user:
+                    continue
+                user_id = int(user['id'])
+                try:
+                    await bot.send_message(chat_id=user_id, text=article_message, parse_mode="html")
+                    sent += 1
+                except FloodWait as e:
+                    await asyncio.sleep(e.value)
+                    continue
+                except InputUserDeactivated:
+                    await db.delete_user(user_id)
+                    deleted += 1
+                except UserIsBlocked:
+                    await db.delete_user(user_id)
+                    blocked += 1
+                except PeerIdInvalid:
+                    await db.delete_user(user_id)
+                    failed += 1
+                except Exception as e:
+                    failed += 1
+                    logger.error(f"Error sending to {user_id}: {e}")
+                done += 1
+                if done % 20 == 0:
+                    logger.info(f"Progress: {done}/{total_users} | Sent: {sent} | Blocked: {blocked} | Deleted: {deleted} | Failed: {failed}")
+            
+            broadcast_time = timedelta(seconds=int(time.time() - start_time))
+            summary = (
+                f"✅ Daily Article Broadcast Completed in {broadcast_time}\n\n"
+                f"Total Users: {total_users}\n"
+                f"Sent: {sent}\n"
+                f"Blocked: {blocked}\n"
+                f"Deleted: {deleted}\n"
+                f"Failed: {failed}\n\n"
+                f"Article Sent:\n{article_message}"
+            )
+            logger.info(summary)
+            await bot.send_message(chat_id=LOG_CHANNEL, text=summary)
+        except Exception as e:
+            logger.error(f"Error retrieving users: {e}")
+            await bot.send_message(chat_id=LOG_CHANNEL, text=f"Error retrieving users: {e}")
+        
+        await asyncio.sleep(86400)
+
+def schedule_daily_articles(client: Client):
+    asyncio.create_task(send_daily_article(client))
 
