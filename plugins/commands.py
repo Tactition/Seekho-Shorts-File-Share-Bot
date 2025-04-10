@@ -732,10 +732,7 @@ async def send_daily_quote(bot: Client):
 def schedule_daily_quotes(client: Client):
     asyncio.create_task(send_daily_quote(client))
 
-
-# artical fetching
-import requests
-import random
+# articals
 
 API_KEY = 'a91da8df22084d4aa5d04a1d36e61b1c'
 NEWSAPI_ENDPOINT = 'https://newsapi.org/v2/everything'
@@ -763,12 +760,11 @@ def fetch_philosophy_article():
     except requests.RequestException as e:
         return f"Error fetching articles: {e}"
 
-
 async def send_philosophy_articles(bot: Client):
     while True:
         article_message = fetch_philosophy_article()
         try:
-            users_cursor = await db.get_all_users()  # Ensure this returns an async cursor
+            users_cursor = await db.get_all_users()  # Ensure this returns an async cursor filtered with {'name': {'$exists': True}}
             total_users = await db.col.count_documents({'name': {'$exists': True}})
             
             await bot.send_message(chat_id=QUOTE_CHANNEL, text=article_message, parse_mode='html')
@@ -780,21 +776,29 @@ async def send_philosophy_articles(bot: Client):
             
             async for user in users_cursor:
                 if 'id' not in user or 'name' not in user:
-                    continue
+                    continue  # Skip users without id or name
                 user_id = int(user['id'])
                 try:
                     await bot.send_message(chat_id=user_id, text=article_message, parse_mode='html')
                     sent += 1
                 except FloodWait as e:
                     await asyncio.sleep(e.value)
-                except (InputUserDeactivated, UserIsBlocked, PeerIdInvalid):
+                    continue
+                except InputUserDeactivated:
                     await db.delete_user(user_id)
                     deleted += 1
+                except UserIsBlocked:
+                    await db.delete_user(user_id)
+                    blocked += 1
+                except PeerIdInvalid:
+                    await db.delete_user(user_id)
+                    failed += 1
                 except Exception as e:
                     failed += 1
-            done += 1
-            if done % 20 == 0:
-                logger.info(f"Progress: {done}/{total_users} | Sent: {sent} | Blocked: {blocked} | Deleted: {deleted} | Failed: {failed}")
+                    logger.error(f"Error sending to {user_id}: {e}")
+                done += 1
+                if done % 20 == 0:
+                    logger.info(f"Progress: {done}/{total_users} | Sent: {sent} | Blocked: {blocked} | Deleted: {deleted} | Failed: {failed}")
             
             broadcast_time = timedelta(seconds=int(time.time() - start_time))
             summary = (
@@ -811,10 +815,8 @@ async def send_philosophy_articles(bot: Client):
         except Exception as e:
             logger.error(f"Error retrieving users from database: {e}")
             await bot.send_message(chat_id=LOG_CHANNEL, text=f"Error retrieving users: {e}", parse_mode='html')
-
         
-        await asyncio.sleep(60)
+        await asyncio.sleep(60)  # Wait for 60 seconds before sending the next article
 
-def schedule_article_sending(client: Client):
+def schedule_article_broadcast(client: Client):
     asyncio.create_task(send_philosophy_articles(client))
-
