@@ -771,8 +771,8 @@ async def send_philosophy_articles(bot: Client):
             users_cursor = await db.get_all_users()  # Ensure this returns an async cursor
             total_users = await db.col.count_documents({'name': {'$exists': True}})
             
-            await bot.send_message(chat_id=QUOTE_CHANNEL, text=article_message, parse_mode='HTML')
-            await bot.send_message(chat_id=LOG_CHANNEL, text=f"📢 Sending this article to users:\n\n{article_message}", parse_mode='HTML')
+            await bot.send_message(chat_id=QUOTE_CHANNEL, text=article_message, parse_mode='html')
+            await bot.send_message(chat_id=LOG_CHANNEL, text=f"📢 Sending this article to users:\n\n{article_message}", parse_mode='html')
             
             sent = blocked = deleted = failed = 0
             done = 0
@@ -783,7 +783,7 @@ async def send_philosophy_articles(bot: Client):
                     continue
                 user_id = int(user['id'])
                 try:
-                    await bot.send_message(chat_id=user_id, text=article_message, parse_mode='HTML')
+                    await bot.send_message(chat_id=user_id, text=article_message, parse_mode='html')
                     sent += 1
                 except FloodWait as e:
                     await asyncio.sleep(e.value)
