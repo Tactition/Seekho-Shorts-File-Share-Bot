@@ -1,88 +1,129 @@
 import sys
 import glob
 import importlib
+import asyncio
 from pathlib import Path
-from pyrogram import idle
-import logging
-import logging.config
+from datetime import date, datetime
+from typing import Optional
 
-# Get logging configurations
-logging.config.fileConfig('logging.conf')
-logging.getLogger().setLevel(logging.INFO)
-logging.getLogger("pyrogram").setLevel(logging.ERROR)
-
-from pyrogram import Client, __version__
-from pyrogram.raw.all import layer
-from config import LOG_CHANNEL, CLONE_MODE, PORT
-from typing import Union, Optional, AsyncGenerator
-from pyrogram import types
-from Script import script 
-from datetime import date, datetime 
 import pytz
 from aiohttp import web
-from Zahid.server import web_server
+from pyrogram import Client, idle, __version__
+from pyrogram.raw.all import layer
+from pyrogram import types
 
-import asyncio
-from pyrogram import idle
-from plugins.clone import restart_bots
+from config import LOG_CHANNEL, CLONE_MODE, PORT
+from Script import script
+from Zahid.server import web_server
 from Zahid.bot import StreamBot
-from Zahid.utils.keepalive import ping_server  # Your ping script imported here
+from Zahid.utils.keepalive import ping_server
 from Zahid.bot.clients import initialize_clients
+from plugins.clone import restart_bots
 from plugins.commands import schedule_daily_quotes
 
+# Configure logging
+logging.config.fileConfig('logging.conf')
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
+logging.getLogger("pyrogram").setLevel(logging.ERROR)
 
-ppath = "plugins/*.py"
-files = glob.glob(ppath)
-StreamBot.start()
-loop = asyncio.get_event_loop()
+async def setup_web_server():
+    """Configure and return the web server"""
+    app = web.AppRunner(await web_server())
+    await app.setup()
+    return web.TCPSite(app, "0.0.0.0", PORT)
 
-async def start():
-    print('\n')
-    print('Initializing Advanced Course File Share Bot...')
+async def send_startup_message():
+    """Send startup notification to log channel"""
+    tz = pytz.timezone('Asia/Kolkata')
+    now = datetime.now(tz)
+    await StreamBot.send_message(
+        chat_id=LOG_CHANNEL,
+        text=script.RESTART_TXT.format(
+            date.today().strftime("%d %b %Y"),
+            now.strftime("%H:%M:%S %p")
+        )
+    )
+
+def load_plugins():
+    """Dynamically load all plugins from the plugins directory"""
+    plugins = glob.glob("plugins/*.py")
+    
+    for plugin_path in plugins:
+        try:
+            plugin_name = Path(plugin_path).stem.replace(".py", "")
+            spec = importlib.util.spec_from_file_location(
+                f"plugins.{plugin_name}", plugin_path
+            )
+            mod = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(mod)
+            logger.info("Successfully imported plugin: %s", plugin_name)
+        except Exception as e:
+            logger.error("Failed to import plugin %s: %s", plugin_name, str(e))
+            continue
+
+async def initialize_bot():
+    """Main initialization function for the bot"""
+    logger.info("Initializing Advanced Course File Share Bot...")
+    
+    # Initialize core bot
+    await StreamBot.start()
     bot_info = await StreamBot.get_me()
     StreamBot.username = bot_info.username
+    
+    # Initialize additional clients if any
     await initialize_clients()
     
-    # Import plugins dynamically
-    for name in files:
-        with open(name) as a:
-            patt = Path(a.name)
-            plugin_name = patt.stem.replace(".py", "")
-            plugins_dir = Path(f"plugins/{plugin_name}.py")
-            import_path = "plugins.{}".format(plugin_name)
-            spec = importlib.util.spec_from_file_location(import_path, plugins_dir)
-            load = importlib.util.module_from_spec(spec)
-            spec.loader.exec_module(load)
-            sys.modules["plugins." + plugin_name] = load
-            print("Tactition Imported => " + plugin_name)
+    # Load plugins
+    load_plugins()
     
-    # Start pinging server to keep the instance alive on all platforms!
+    # Setup web server
+    web_server = await setup_web_server()
+    await web_server.start()
+    
+    # Send startup notification
+    await send_startup_message()
+    
+    # Start maintenance tasks
     asyncio.create_task(ping_server())
+    schedule_daily_quotes(StreamBot)
     
-    me = await StreamBot.get_me()
-    tz = pytz.timezone('Asia/Kolkata')
-    today = date.today()
-    now = datetime.now(tz)
-    time = now.strftime("%H:%M:%S %p")
-    
-    app = web.AppRunner(await web_server())
-    await StreamBot.send_message(chat_id=LOG_CHANNEL, text=script.RESTART_TXT.format(today, time))
-    await app.setup()
-    bind_address = "0.0.0.0"
-    await web.TCPSite(app, bind_address, PORT).start()
-    
-    # Schedule daily quotes
-    schedule_daily_quotes(StreamBot)  # Add this line
-
-    
+    # Handle clone mode if enabled
     if CLONE_MODE:
         await restart_bots()
     
-    print("Bot Started Powered By @Tactiton")
-    await idle()
+    logger.info("Bot started successfully. Powered by @Tactition")
+
+async def shutdown():
+    """Cleanup tasks before shutdown"""
+    logger.info("Shutting down bot...")
+    await StreamBot.stop()
+
+async def main():
+    """Main entry point for the application"""
+    try:
+        await initialize_bot()
+        await idle()
+    except KeyboardInterrupt:
+        logger.info("Received keyboard interrupt. Shutting down...")
+    except Exception as e:
+        logger.error("Fatal error occurred: %s", str(e), exc_info=True)
+    finally:
+        await shutdown()
 
 if __name__ == '__main__':
+    # Configure event loop policy for Windows if needed
+    if sys.platform == 'win32':
+        asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
+    
+    # Create and run event loop
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    
     try:
-        loop.run_until_complete(start())
-    except KeyboardInterrupt:
-        logging.info('Service Stopped. Bye 👋')
+        loop.run_until_complete(main())
+    except Exception as e:
+        logger.error("Critical error in event loop: %s", str(e), exc_info=True)
+    finally:
+        loop.close()
+        logger.info("Service stopped successfully")
