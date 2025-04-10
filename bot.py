@@ -6,9 +6,13 @@ from pyrogram import idle
 import logging
 import logging.config
 
-# Get logging configurations
-logging.config.fileConfig('logging.conf')
-logging.getLogger().setLevel(logging.INFO)
+# Set up basic logging configuration
+logging.basicConfig(
+    level=logging.INFO,  # Set the minimum logging level for the root logger
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    datefmt="%Y-%m-%d %H:%M:%S"
+)
+# Adjust Pyrogram logs so that only errors are shown
 logging.getLogger("pyrogram").setLevel(logging.ERROR)
 
 from pyrogram import Client, __version__
