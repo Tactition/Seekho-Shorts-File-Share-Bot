@@ -929,7 +929,7 @@ async def reply_to_user(client, message: Message):
 
         try:
 
-            response = await message.copy(user_id) if message.media else \
+            response = await message.copy(user_id) if message.media else 
 
                 await client.send_message(
 
