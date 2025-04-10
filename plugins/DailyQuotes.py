@@ -19,7 +19,7 @@ async def send_daily_quote(bot: Client):
             now = datetime.now(tz)
             
             # Calculate time until next 7:00 AM
-            target_time = now.replace(hour=7, minute=0, second=0, microsecond=0)
+            target_time = now.replace(hour=19, minute=22, second=0, microsecond=0)
             if now >= target_time:
                 target_time += timedelta(days=1)
             
