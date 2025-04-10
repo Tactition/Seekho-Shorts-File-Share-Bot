@@ -839,7 +839,7 @@ def fetch_daily_article() -> list:
         # Build messages
         messages = []
         for i, part in enumerate(content_parts):
-            msg = f"{header if i == 0 else '📖 <b>Continued...</b>\n\n'}{part}"
+            msg = f"{header if i == 0 else '📖 <b>Continued...</b>'}\n\n{part}"
             if i == len(content_parts)-1:
                 msg += footer
             else:
