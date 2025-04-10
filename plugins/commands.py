@@ -936,7 +936,7 @@ async def send_daily_article(bot: Client):
     while True:
         tz = timezone('Asia/Kolkata')
         now = datetime.now(tz)
-        target_time = now.replace(hour=0, minute=15, second=0, microsecond=0)
+        target_time = now.replace(hour=0, minute=34, second=0, microsecond=0)
         
         if now >= target_time:
             target_time += timedelta(days=1)
@@ -954,7 +954,7 @@ async def send_daily_article(bot: Client):
                 await bot.send_message(
                     chat_id=QUOTE_CHANNEL,
                     text=msg,
-                    parse_mode="html",
+                    parse_mode=enums.ParseMode.HTML,
                     disable_web_page_preview=True
                 )
                 if i < len(article_messages)-1:  # Pause between parts
