@@ -6,7 +6,6 @@ from pyrogram import idle
 import logging
 import logging.config
 
-# Set up basic logging configuration
 # Get logging configurations
 logging.config.fileConfig('logging.conf')
 logging.getLogger().setLevel(logging.INFO)
@@ -29,7 +28,7 @@ from plugins.clone import restart_bots
 from Zahid.bot import StreamBot
 from Zahid.utils.keepalive import ping_server  # Your ping script imported here
 from Zahid.bot.clients import initialize_clients
-from plugins.DailyQuotes import schedule_daily_quotes
+from plugins.daily_quotes import schedule_daily_quotes
 
 
 ppath = "plugins/*.py"
@@ -71,8 +70,9 @@ async def start():
     await app.setup()
     bind_address = "0.0.0.0"
     await web.TCPSite(app, bind_address, PORT).start()
+    
     # Schedule daily quotes
-    schedule_daily_quotes(StreamBot)
+    schedule_daily_quotes(StreamBot)  # Add this line
 
     
     if CLONE_MODE:
