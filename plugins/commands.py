@@ -27,7 +27,7 @@ import socket
 import ssl
 import urllib.parse
 import requests
-from bs4 import BeautifulSoup
+from bs4 import BeautifulSoup, Comment
 
 
 logger = logging.getLogger(__name__)
@@ -836,20 +836,43 @@ def schedule_daily_articles(client: Client):
 
 #articals
 
+def clean_article_content(content):
+    """Remove 'What Do You Think?' section and comment links"""
+    soup = BeautifulSoup(content, 'html.parser')
+    
+    # Remove comment sections
+    for heading in soup.find_all(['h2', 'h3', 'h4', 'strong']):
+        if 'what do you think' in heading.text.strip().lower():
+            for element in heading.find_next_siblings():
+                element.decompose()
+            heading.decompose()
+    
+    # Remove comment links
+    for link in soup.find_all('a', href=True):
+        if any(x in link['href'].lower() for x in ['#respond', '/comment']):
+            link.decompose()
+    
+    # Clean empty tags
+    for tag in soup.find_all():
+        if len(tag.get_text(strip=True)) == 0:
+            tag.decompose()
+    
+    return str(soup)
+
 def split_content(content, max_length=4096):
-    """Split html content into chunks without breaking tags"""
+    """Split HTML content into chunks without breaking tags"""
     chunks = []
     while len(content) > 0:
         if len(content) <= max_length:
             chunks.append(content)
             break
         
-        # Find last valid split point before max_length
+        # Find last valid split point
         split_at = max_length
         while split_at > 0 and content[split_at] != '>' and not content[split_at:].startswith('</'):
             split_at -= 1
         
-        # Fallback if no valid split found
+        # Fallback split at word boundary
         if split_at == 0:
             split_at = max_length
             while split_at > 0 and not content[split_at-1].isspace():
@@ -864,7 +887,8 @@ def fetch_daily_article() -> list:
     try:
         # Get total posts count
         total_response = requests.head(
-            "https://www.franksonnenbergonline.com/wp-json/wp/v2/posts?per_page=1"
+            "https://www.franksonnenbergonline.com/wp-json/wp/v2/posts?per_page=1",
+            timeout=10
         )
         total_posts = int(total_response.headers.get("X-WP-Total", 100))
         
@@ -886,10 +910,12 @@ def fetch_daily_article() -> list:
         
         article = response.json()[0]
         title = html.escape(article['title']['rendered'])
-        content = article['content']['rendered']
-        link = article['link']
-
-        # Build header and footer
+        raw_content = article['content']['rendered']
+        
+        # Clean content
+        cleaned_content = clean_article_content(raw_content)
+        
+        # Build message parts
         header = (
             "🔥 <b>Fuel for Your Evening to Conquer Tomorrow</b>\n\n"
             f"📖 <b>{title}</b>\n\n"
@@ -898,13 +924,11 @@ def fetch_daily_article() -> list:
             "\n\n━━━━━━━━━━━━━━━━━━━\n"
             "🎧 <b>Explore our Empire Here:</b> @Excellerators"
         )
-        link_footer = f"\n\n🔗 Full Article: {link}"  # Optional link at end
-
-        # Split content into manageable parts
-        available_space = 4096 - len(header) - len(footer) - 100  # Buffer
-        content_parts = split_content(content, available_space)
         
-        # Build message parts
+        # Split cleaned content
+        available_space = 4096 - len(header) - len(footer) - 100
+        content_parts = split_content(cleaned_content, available_space)
+        
         messages = []
         for i, part in enumerate(content_parts):
             if i == 0:
@@ -913,7 +937,7 @@ def fetch_daily_article() -> list:
                 msg = f"📖 <b>Continued...</b>\n\n{part}"
             
             if i == len(content_parts)-1:
-                msg += f"{footer}{link_footer}"
+                msg += footer
             else:
                 msg += "\n\n(Continued...)"
             
@@ -928,7 +952,7 @@ def fetch_daily_article() -> list:
             "💖 A Little Love And Fuel for Your Soul \n\n"
             "Stay inspired - You Will Get Everything!\n\n"
             "━━━━━━━━━━━━━━━━━━━\n"
-            "Need a lift? We have got your back Build your mindset And Make today count. "
+            "Need a lift? We’ve got your back → Build your mindset And Make today count. "
             "Listen in @Self_Improvement_Audiobooks"
         ]
 
@@ -936,20 +960,19 @@ async def send_daily_article(bot: Client):
     while True:
         tz = timezone('Asia/Kolkata')
         now = datetime.now(tz)
-        target_time = now.replace(hour=0, minute=34, second=0, microsecond=0)
+        target_time = now.replace(hour=0, minute=59, second=0, microsecond=0)
         
         if now >= target_time:
             target_time += timedelta(days=1)
             
         sleep_seconds = (target_time - now).total_seconds()
-        logger.info(f"Sleeping for {sleep_seconds:.1f} seconds until 11 PM IST")
+        logger.info(f"Sleeping for {sleep_seconds:.1f} seconds until next 11 PM IST")
         await asyncio.sleep(sleep_seconds)
 
         logger.info("11:00 PM IST - Sending article...")
         try:
             article_messages = fetch_daily_article()
             
-            # Send all parts sequentially
             for i, msg in enumerate(article_messages):
                 await bot.send_message(
                     chat_id=QUOTE_CHANNEL,
@@ -957,13 +980,13 @@ async def send_daily_article(bot: Client):
                     parse_mode=enums.ParseMode.HTML,
                     disable_web_page_preview=True
                 )
-                if i < len(article_messages)-1:  # Pause between parts
+                if i < len(article_messages)-1:
                     await asyncio.sleep(1)
             
-            # Log completion
-            log_msg = f"📢 Sent {len(article_messages)} part article"
-            await bot.send_message(LOG_CHANNEL, log_msg)
-            logger.info(f"Sent {len(article_messages)} parts")
+            await bot.send_message(
+                chat_id=LOG_CHANNEL,
+                text=f"📢 Successfully sent {len(article_messages)} part article"
+            )
 
         except Exception as e:
             logger.error(f"Send error: {str(e)[:100]}")
@@ -972,7 +995,7 @@ async def send_daily_article(bot: Client):
                 text=f"❌ Article failed: {str(e)[:200]}"
             )
 
-        await asyncio.sleep(86400)  # 24-hour cooldown
+        await asyncio.sleep(86400)
 
 def schedule_daily_articles(client: Client):
     asyncio.create_task(send_daily_article(client))
