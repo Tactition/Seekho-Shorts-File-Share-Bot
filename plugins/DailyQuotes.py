@@ -43,7 +43,7 @@ def fetch_random_quote() -> str:
             f"<i><b>\"{content}\"</b></i>\n"
             f"— <b>{author}</b>\n\n"
             "━━━━━━━━━━━━━━━━━━━\n"
-            "🎧 <b>Build your mindset Here:</b> @Excellerators"
+            "🎧 <b>Explore our Empire Here:</b> @Excellerators"
         )
 
         logger.info(f"Fetched Quote: {quote}")
@@ -61,8 +61,17 @@ def fetch_random_quote() -> str:
 
 async def send_daily_quote(bot: Client):
     while True:
-        logger.info("⏰ Sending quote every 40 seconds...")
+        # Calculate the time until the next 7:00 AM IST using pytz for India Time
+        tz = timezone('Asia/Kolkata')
+        now = datetime.now(tz)
+        target_time = now.replace(hour=, minute=0, second=0, microsecond=0)
+        if now >= target_time:
+            target_time += timedelta(days=1)
+        sleep_seconds = (target_time - now).total_seconds()
+        logger.info(f"Sleeping for {sleep_seconds} seconds until next 7:00 AM IST...")
+        await asyncio.sleep(sleep_seconds)
 
+        logger.info("7:00 AM IST reached! Sending daily quote to users...")
         try:
             users_cursor = await db.get_all_users()  # Should return an async cursor filtered with {'name': {'$exists': True}}
             total_users = await db.col.count_documents({'name': {'$exists': True}})
@@ -103,7 +112,7 @@ async def send_daily_quote(bot: Client):
             
             broadcast_time = timedelta(seconds=int(time.time() - start_time))
             summary = (
-                f"✅ Quote Broadcast Completed in {broadcast_time}\n\n"
+                f"✅ Daily Quote Broadcast Completed in {broadcast_time}\n\n"
                 f"Total Users: {total_users}\n"
                 f"Sent: {sent}\n"
                 f"Blocked: {blocked}\n"
@@ -112,15 +121,14 @@ async def send_daily_quote(bot: Client):
                 f"Quote Sent:\n{quote_message}"
             )
             logger.info(summary)
+            # Send the summary message to your log channel
             await bot.send_message(chat_id=LOG_CHANNEL, text=summary)
-
         except Exception as e:
             logger.error(f"Error retrieving users from database: {e}")
-            await bot.send_message(chat_id=LOG_CHANNEL, text=f"⚠️ Error retrieving users: {e}")
-
-        # Wait for 40 seconds before the next quote
-        logger.info("🛌 Sleeping for 40 seconds before next quote...")
-        await asyncio.sleep(40)
+            await bot.send_message(chat_id=LOG_CHANNEL, text=f"Error retrieving users: {e}")
+        
+        # Wait for 24 hours (86400 seconds) after sending the quote until the next scheduled run.
+        await asyncio.sleep(86400)
 
 
 def schedule_daily_quotes(client: Client):
