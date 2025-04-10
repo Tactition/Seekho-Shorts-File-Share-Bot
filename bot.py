@@ -18,7 +18,7 @@ from typing import Union, Optional, AsyncGenerator
 from pyrogram import types
 from Script import script 
 from datetime import date, datetime 
-import pytz import timezone
+from pytz import timezone
 from aiohttp import web
 from Zahid.server import web_server
 
