@@ -58,6 +58,14 @@ async def start():
     
     # Start pinging server to keep the instance alive on all platforms!
     asyncio.create_task(ping_server())
+
+    try:
+        from plugins.DailyQuotes import start_quote_task
+            start_quote_task(StreamBot)
+            print("Daily quotes task started")
+        except Exception as e:
+            print(f"Failed to start quotes task: {str(e)}")  
+    
     
     me = await StreamBot.get_me()
     tz = pytz.timezone('Asia/Kolkata')
