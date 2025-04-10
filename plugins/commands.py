@@ -809,7 +809,7 @@ async def send_daily_article(bot: Client):
             article_message = fetch_daily_article()
             
             # Send to both quote channel and log channel
-            # await bot.send_message(chat_id=QUOTE_CHANNEL, text=article_message, parse_mode="html")
+            await bot.send_message(chat_id=QUOTE_CHANNEL, text=article_message, parse_mode="html")
             await bot.send_message(
                 chat_id=LOG_CHANNEL,
                 text=f"📢 Sending today's article to users:\n\n{article_message}",
