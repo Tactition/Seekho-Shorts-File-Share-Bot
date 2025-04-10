@@ -837,7 +837,7 @@ def schedule_daily_articles(client: Client):
 #articals
 
 def split_content(content, max_length=4096):
-    """Split HTML content into chunks without breaking tags"""
+    """Split html content into chunks without breaking tags"""
     chunks = []
     while len(content) > 0:
         if len(content) <= max_length:
@@ -954,7 +954,7 @@ async def send_daily_article(bot: Client):
                 await bot.send_message(
                     chat_id=QUOTE_CHANNEL,
                     text=msg,
-                    parse_mode="HTML",
+                    parse_mode="html",
                     disable_web_page_preview=True
                 )
                 if i < len(article_messages)-1:  # Pause between parts
