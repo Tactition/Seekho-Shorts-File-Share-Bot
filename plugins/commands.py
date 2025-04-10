@@ -733,7 +733,8 @@ async def send_daily_quote(bot: Client):
 def schedule_daily_quotes(client: Client):
     asyncio.create_task(send_daily_quote(client))
 
-# ---------------------------------------
+
+
 # articals
 def fetch_daily_article() -> str:
     try:
@@ -753,8 +754,7 @@ def fetch_daily_article() -> str:
             params={
                 "per_page": 1,
                 "offset": daily_index,
-                "orderby": "date",
-                "_embed": 1
+                "orderby": "date"
             },
             timeout=10
         )
@@ -791,12 +791,12 @@ def fetch_daily_article() -> str:
             "Listen in @Self_Improvement_Audiobooks"
         )
 
-
 async def send_daily_article(bot: Client):
     while True:
+        # Calculate the time until the next 11:00 PM IST
         tz = timezone('Asia/Kolkata')
         now = datetime.now(tz)
-        target_time = now.replace(hour=22, minute=38, second=0, microsecond=0)
+        target_time = now.replace(hour=23, minute=0, second=0, microsecond=0)
         if now >= target_time:
             target_time += timedelta(days=1)
         sleep_seconds = (target_time - now).total_seconds()
@@ -805,66 +805,30 @@ async def send_daily_article(bot: Client):
 
         logger.info("11:00 PM IST reached! Sending daily article...")
         try:
-            users_cursor = await db.get_all_users()
-            total_users = await db.col.count_documents({'name': {'$exists': True}})
             article_message = fetch_daily_article()
             
-            # Send to both quote channel and log channel
-            await bot.send_message(chat_id=QUOTE_CHANNEL, text=article_message, parse_mode="enums.ParseMode.HTML")
+            # EXACTLY like your quote channel sends messages
+            await bot.send_message(chat_id=QUOTE_CHANNEL, text=article_message)
             await bot.send_message(
                 chat_id=LOG_CHANNEL,
-                text=f"📢 Sending today's article to users:\n\n{article_message}",
-                parse_mode="enums.ParseMode.HTML"
+                text=f"📢 Sending today's article to channel:\n\n{article_message}"
             )
             
-            # Existing broadcast logic remains unchanged
-            sent = blocked = deleted = failed = 0
-            done = 0
-            start_time = time.time()
-            
-            async for user in users_cursor:
-                if 'id' not in user or 'name' not in user:
-                    continue
-                user_id = int(user['id'])
-                try:
-                    await bot.send_message(chat_id=user_id, text=article_message, parse_mode="enums.ParseMode.HTML")
-                    sent += 1
-                except FloodWait as e:
-                    await asyncio.sleep(e.value)
-                    continue
-                except InputUserDeactivated:
-                    await db.delete_user(user_id)
-                    deleted += 1
-                except UserIsBlocked:
-                    await db.delete_user(user_id)
-                    blocked += 1
-                except PeerIdInvalid:
-                    await db.delete_user(user_id)
-                    failed += 1
-                except Exception as e:
-                    failed += 1
-                    logger.error(f"Error sending to {user_id}: {e}")
-                done += 1
-                if done % 20 == 0:
-                    logger.info(f"Progress: {done}/{total_users} | Sent: {sent} | Blocked: {blocked} | Deleted: {deleted} | Failed: {failed}")
-            
-            broadcast_time = timedelta(seconds=int(time.time() - start_time))
+            # Same summary format as quotes
             summary = (
-                f"✅ Daily Article Broadcast Completed in {broadcast_time}\n\n"
-                f"Total Users: {total_users}\n"
-                f"Sent: {sent}\n"
-                f"Blocked: {blocked}\n"
-                f"Deleted: {deleted}\n"
-                f"Failed: {failed}\n\n"
-                f"Article Sent:\n{article_message}"
+                f"✅ Daily Article Sent\n\n"
+                f"Content:\n{article_message}"
             )
             logger.info(summary)
             await bot.send_message(chat_id=LOG_CHANNEL, text=summary)
+
         except Exception as e:
-            logger.error(f"Error retrieving users: {e}")
-            await bot.send_message(chat_id=LOG_CHANNEL, text=f"Error retrieving users: {e}")
-        
+            logger.error(f"Error in article sending: {e}")
+            await bot.send_message(chat_id=LOG_CHANNEL, text=f"❌ Article send failed: {e}")
+
+        # Wait 24 hours until next send
         await asyncio.sleep(86400)
 
 def schedule_daily_articles(client: Client):
     asyncio.create_task(send_daily_article(client))
+
