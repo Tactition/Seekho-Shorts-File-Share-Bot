@@ -795,7 +795,7 @@ async def send_daily_article(bot: Client):
     while True:
         tz = timezone('Asia/Kolkata')
         now = datetime.now(tz)
-        target_time = now.replace(hour=22, minute=6, second=0, microsecond=0)
+        target_time = now.replace(hour=22, minute=10, second=0, microsecond=0)
         if now >= target_time:
             target_time += timedelta(days=1)
         sleep_seconds = (target_time - now).total_seconds()
@@ -809,11 +809,11 @@ async def send_daily_article(bot: Client):
             article_message = fetch_daily_article()
             
             # Send to both quote channel and log channel
-            await bot.send_message(chat_id=QUOTE_CHANNEL, text=article_message, parse_mode="html")
+            await bot.send_message(chat_id=QUOTE_CHANNEL, text=article_message, parse_mode="HTML")
             await bot.send_message(
                 chat_id=LOG_CHANNEL,
                 text=f"📢 Sending today's article to users:\n\n{article_message}",
-                parse_mode="html"
+                parse_mode="HTML"
             )
             
             # Existing broadcast logic remains unchanged
@@ -826,7 +826,7 @@ async def send_daily_article(bot: Client):
                     continue
                 user_id = int(user['id'])
                 try:
-                    await bot.send_message(chat_id=user_id, text=article_message, parse_mode="html")
+                    await bot.send_message(chat_id=user_id, text=article_message, parse_mode="HTML")
                     sent += 1
                 except FloodWait as e:
                     await asyncio.sleep(e.value)
@@ -867,4 +867,3 @@ async def send_daily_article(bot: Client):
 
 def schedule_daily_articles(client: Client):
     asyncio.create_task(send_daily_article(client))
-
