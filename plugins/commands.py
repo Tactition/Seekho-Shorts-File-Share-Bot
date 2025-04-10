@@ -928,7 +928,7 @@ def fetch_daily_article() -> list:
             "💖 A Little Love And Fuel for Your Soul \n\n"
             "Stay inspired - You Will Get Everything!\n\n"
             "━━━━━━━━━━━━━━━━━━━\n"
-            "Need a lift? We’ve got your back → Build your mindset And Make today count. "
+            "Need a lift? We have got your back Build your mindset And Make today count. "
             "Listen in @Self_Improvement_Audiobooks"
         ]
 
@@ -936,7 +936,7 @@ async def send_daily_article(bot: Client):
     while True:
         tz = timezone('Asia/Kolkata')
         now = datetime.now(tz)
-        target_time = now.replace(hour=0, minute=8, second=0, microsecond=0)
+        target_time = now.replace(hour=0, minute=15, second=0, microsecond=0)
         
         if now >= target_time:
             target_time += timedelta(days=1)
