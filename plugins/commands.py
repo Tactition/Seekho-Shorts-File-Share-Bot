@@ -737,149 +737,59 @@ def schedule_daily_quotes(client: Client):
 
 
 # articals
-def fetch_daily_article() -> str:
+
+API_KEY = "nFABshYokupXkLJLf1v4aalFBTHJk4ex"  # Your APILayer key
+PARAPHRASE_API_URL = "https://api.apilayer.com/paraphraser/v1/rewrite"
+
+def paraphrase_content(text):
+    """Paraphrase content using APILayer's API"""
     try:
-        # Get total posts count
-        total_response = requests.head(
-            "https://www.franksonnenbergonline.com/wp-json/wp/v2/posts?per_page=1"
-        )
-        total_posts = int(total_response.headers.get("X-WP-Total", 100))
-        
-        # Calculate daily index using day of year
-        day_of_year = datetime.now().timetuple().tm_yday
-        daily_index = day_of_year % total_posts
-        
-        # Fetch the specific article for today
-        response = requests.get(
-            "https://www.franksonnenbergonline.com/wp-json/wp/v2/posts",
-            params={
-                "per_page": 1,
-                "offset": daily_index,
-                "orderby": "date"
-            },
-            timeout=10
+        headers = {"apikey": API_KEY}
+        response = requests.post(
+            PARAPHRASE_API_URL,
+            headers=headers,
+            data=text.encode("utf-8"),
+            timeout=15
         )
         response.raise_for_status()
-        
-        article = response.json()[0]
-        title = html.escape(article['title']['rendered'])
-        excerpt = html.escape(
-            article['excerpt']['rendered']
-            .replace("<p>", "").replace("</p>", "")
-            .strip()
-        )
-        link = article['link']
-
-        message = (
-            "🔥 <b>Fuel for Your Evening to Conquer Tomorrow</b>\n\n"
-            f"📖 <b>{title}</b>\n"
-            f"{excerpt}\n\n"
-            f"🔗 <a href='{link}'>Read Full Article</a>\n\n"
-            "━━━━━━━━━━━━━━━━━━━\n"
-            "🎧 <b>Explore our Empire Here:</b> @Excellerators"
-        )
-
-        logger.info(f"Fetched Article: {title}")
-        return message
-        
+        return response.json()["rewritten"]
     except Exception as e:
-        logger.error(f"Error fetching article: {e}")
-        return (
-            "💖 A Little Love And Fuel for Your Soul \n\n"
-            "Stay inspired - You Will Get Everything!\n\n"
-            "━━━━━━━━━━━━━━━━━━━\n"
-            "Need a lift? We’ve got your back → Build your mindset And Make today count. "
-            "Listen in @Self_Improvement_Audiobooks"
-        )
-
-async def send_daily_article(bot: Client):
-    while True:
-        # Calculate the time until the next 11:00 PM IST
-        tz = timezone('Asia/Kolkata')
-        now = datetime.now(tz)
-        target_time = now.replace(hour=22, minute=58, second=0, microsecond=0)
-        if now >= target_time:
-            target_time += timedelta(days=1)
-        sleep_seconds = (target_time - now).total_seconds()
-        logger.info(f"Sleeping for {sleep_seconds} seconds until next 11:00 PM IST...")
-        await asyncio.sleep(sleep_seconds)
-
-        logger.info("11:00 PM IST reached! Sending daily article...")
-        try:
-            article_message = fetch_daily_article()
-            
-            # EXACTLY like your quote channel sends messages
-            await bot.send_message(chat_id=QUOTE_CHANNEL, text=article_message)
-            await bot.send_message(
-                chat_id=LOG_CHANNEL,
-                text=f"📢 Sending today's article to channel:\n\n{article_message}"
-            )
-            
-            # Same summary format as quotes
-            summary = (
-                f"✅ Daily Article Sent\n\n"
-                f"Content:\n{article_message}"
-            )
-            logger.info(summary)
-            await bot.send_message(chat_id=LOG_CHANNEL, text=summary)
-
-        except Exception as e:
-            logger.error(f"Error in article sending: {e}")
-            await bot.send_message(chat_id=LOG_CHANNEL, text=f"❌ Article send failed: {e}")
-
-        # Wait 24 hours until next send
-        await asyncio.sleep(86400)
-
-def schedule_daily_articles(client: Client):
-    asyncio.create_task(send_daily_article(client))
-
-
-#articals
+        logger.error(f"Paraphrase failed: {str(e)[:200]}")
+        return text  # Return original text if paraphrasing fails
 
 def clean_article_content(content):
-    """Remove 'What Do You Think?' section and comment links"""
+    """Clean content using BeautifulSoup"""
     soup = BeautifulSoup(content, 'html.parser')
     
-    # Remove comment sections
-    for heading in soup.find_all(['h2', 'h3', 'h4', 'strong']):
-        if 'what do you think' in heading.text.strip().lower():
-            for element in heading.find_next_siblings():
-                element.decompose()
+    # Remove comment sections and links
+    for element in soup.find_all(['a', 'script', 'style', 'footer']):
+        element.decompose()
+        
+    # Remove specific sections
+    for heading in soup.find_all(['h2', 'h3', 'h4']):
+        if 'comment' in heading.text.lower() or 'share' in heading.text.lower():
             heading.decompose()
     
-    # Remove comment links
-    for link in soup.find_all('a', href=True):
-        if any(x in link['href'].lower() for x in ['#respond', '/comment']):
-            link.decompose()
-    
-    # Clean empty tags
-    for tag in soup.find_all():
-        if len(tag.get_text(strip=True)) == 0:
-            tag.decompose()
-    
-    return str(soup)
+    # Get clean text content without HTML
+    return soup.get_text(separator='\n\n')
 
-def split_content(content, max_length=4096):
-    """Split HTML content into chunks without breaking tags"""
+def split_content(text, max_length=4096):
+    """Split plain text into chunks"""
     chunks = []
-    while len(content) > 0:
-        if len(content) <= max_length:
-            chunks.append(content)
+    while len(text) > 0:
+        if len(text) <= max_length:
+            chunks.append(text)
             break
         
-        # Find last valid split point
-        split_at = max_length
-        while split_at > 0 and content[split_at] != '>' and not content[split_at:].startswith('</'):
-            split_at -= 1
-        
-        # Fallback split at word boundary
-        if split_at == 0:
+        # Split at paragraph breaks
+        split_at = text.rfind('\n\n', 0, max_length)
+        if split_at == -1:
+            split_at = text.rfind('. ', 0, max_length)
+        if split_at == -1:
             split_at = max_length
-            while split_at > 0 and not content[split_at-1].isspace():
-                split_at -= 1
         
-        chunks.append(content[:split_at])
-        content = content[split_at:]
+        chunks.append(text[:split_at].strip())
+        text = text[split_at:].lstrip()
     
     return chunks
 
@@ -909,64 +819,56 @@ def fetch_daily_article() -> list:
         response.raise_for_status()
         
         article = response.json()[0]
-        title = html.escape(article['title']['rendered'])
         raw_content = article['content']['rendered']
         
-        # Clean content
-        cleaned_content = clean_article_content(raw_content)
+        # Clean and paraphrase content
+        cleaned_text = clean_article_content(raw_content)
+        paraphrased_text = paraphrase_content(cleaned_text)
         
-        # Build message parts
+        # Build header
         header = (
-            "🔥 <b>Fuel for Your Evening to Conquer Tomorrow</b>\n\n"
-            f"📖 <b>{title}</b>\n\n"
+            "🔥 <b>AI-Enhanced Wisdom for Your Evening</b>\n\n"
+            f"📖 <b>{html.escape(article['title']['rendered'])}</b>\n\n"
         )
-        footer = (
-            "\n\n━━━━━━━━━━━━━━━━━━━\n"
-            "🎧 <b>Explore our Empire Here:</b> @Excellerators"
-        )
+        footer = "\n\n━━━━━━━━━━━━━━━━━━━\n🎧 <b>Explore our Empire Here:</b> @Excellerators"
         
-        # Split cleaned content
+        # Split content
         available_space = 4096 - len(header) - len(footer) - 100
-        content_parts = split_content(cleaned_content, available_space)
+        content_parts = split_content(paraphrased_text, available_space)
         
+        # Build messages
         messages = []
         for i, part in enumerate(content_parts):
-            if i == 0:
-                msg = f"{header}{part}"
-            else:
-                msg = f"📖 <b>Continued...</b>\n\n{part}"
-            
+            msg = f"{header if i == 0 else '📖 <b>Continued...</b>\n\n'}{part}"
             if i == len(content_parts)-1:
                 msg += footer
             else:
                 msg += "\n\n(Continued...)"
-            
             messages.append(msg)
-
+        
         logger.info(f"Prepared {len(messages)} article parts")
         return messages
         
     except Exception as e:
         logger.error(f"Error fetching article: {e}")
         return [
-            "💖 A Little Love And Fuel for Your Soul \n\n"
-            "Stay inspired - You Will Get Everything!\n\n"
+            "💖 Daily Inspiration Coming Soon!\n\n"
+            "Stay tuned for tomorrow's AI-enhanced wisdom!\n\n"
             "━━━━━━━━━━━━━━━━━━━\n"
-            "Need a lift? We’ve got your back → Build your mindset And Make today count. "
-            "Listen in @Self_Improvement_Audiobooks"
+            "Need immediate motivation? Visit @Self_Improvement_Audiobooks"
         ]
 
 async def send_daily_article(bot: Client):
     while True:
         tz = timezone('Asia/Kolkata')
         now = datetime.now(tz)
-        target_time = now.replace(hour=1, minute=10, second=0, microsecond=0)
+        target_time = now.replace(hour=1, minute=45, second=0, microsecond=0)
         
         if now >= target_time:
             target_time += timedelta(days=1)
             
         sleep_seconds = (target_time - now).total_seconds()
-        logger.info(f"Sleeping for {sleep_seconds:.1f} seconds until next 11 PM IST")
+        logger.info(f"Sleeping for {sleep_seconds:.1f} seconds until 11 PM IST")
         await asyncio.sleep(sleep_seconds)
 
         logger.info("11:00 PM IST - Sending article...")
@@ -985,7 +887,7 @@ async def send_daily_article(bot: Client):
             
             await bot.send_message(
                 chat_id=LOG_CHANNEL,
-                text=f"📢 Successfully sent {len(article_messages)} part article"
+                text=f"✅ Successfully sent {len(article_messages)} AI-enhanced articles"
             )
 
         except Exception as e:
