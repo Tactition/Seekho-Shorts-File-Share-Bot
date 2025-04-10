@@ -736,7 +736,7 @@ def schedule_daily_quotes(client: Client):
 
 
 
-# articals 
+# articals sending procedeur
 SENT_POSTS_FILE = "sent_posts.json"
 MAX_POSTS_TO_FETCH = 100
 QUILLBOT_API_URL = "https://api.quillbot.com/v1/paraphrase"
@@ -782,66 +782,93 @@ def get_random_unseen_post():
         return None
 
 def clean_content(content):
-    """Clean and normalize text content"""
-    # Remove HTML elements
+    """Deep clean article content"""
     soup = BeautifulSoup(content, 'html.parser')
-    for tag in soup(['script', 'style', 'footer', 'aside', 'a', 'div.comments']):
-        tag.decompose()
-        
-    # Get text and clean
-    text = soup.get_text(separator='\n\n')
-    text = re.sub(r'\s+', ' ', text)  # Remove extra whitespace
-    text = re.sub(r'[^\w\s.,!?\-—]', '', text)  # Remove special chars
-    return text.strip()
+    
+    # Remove unwanted sections
+    unwanted = ['comment', 'share', 'subscribe', 'related posts', 'leave a reply']
+    for element in soup.find_all():
+        if any(keyword in element.get_text().lower() for keyword in unwanted):
+            element.decompose()
+    
+    # Extract core content
+    text = '\n\n'.join(
+        p.get_text(strip=True) 
+        for p in soup.find_all('p') 
+        if len(p.get_text(strip=True)) > 50
+    )
+    
+    # Normalize text
+    text = re.sub(r'\s+', ' ', text)
+    return text[:5000]  # Initial length cap
 
 def paraphrase_content(text):
-    """Paraphrase content using QuillBot with conciseness"""
+    """Create concise, motivational version"""
     try:
-        chunks = [text[i:i+700] for i in range(0, len(text), 700)]
-        paraphrased = []
-        
-        for chunk in chunks:
-            response = requests.post(
-                QUILLBOT_API_URL,
-                json={
-                    "text": chunk,
-                    "strength": 3,
-                    "formality": "all",
-                    "intent": "concise"
-                },
-                timeout=20
-            )
-            
-            if response.status_code == 200:
-                result = response.json().get("data", {}).get("paraphrased", chunk)
-                paraphrased.append(result)
-            else:
-                paraphrased.append(chunk)
-                
-        return " ".join(paraphrased)[:4000]  # Ensure Telegram limit
-    
+        response = requests.post(
+            QUILLBOT_API_URL,
+            json={
+                "text": text[:3000],
+                "strength": 3,
+                "formality": "formal",
+                "intent": "mainpoints"
+            },
+            timeout=20
+        )
+        if response.status_code == 200:
+            return response.json().get("data", {}).get("paraphrased", text)
+        return text[:3000]
     except Exception as e:
         logger.error(f"Paraphrase failed: {str(e)[:200]}")
-        return text[:4096]
+        return text[:3000]
+
+def build_structured_message(title, content):
+    """Create formatted message with all sections"""
+    # Main content (2000-3000 characters)
+    main_body = f"📖 <b>{html.escape(title)}</b>\n\n{content[:3000]}\n\n"
+    
+    # Actionable advice section
+    advice = (
+        "💪 <b>Actionable Steps:</b>\n"
+        "➖ Prioritize tasks using Eisenhower Matrix\n"
+        "➖ Delegate non-essential activities\n"
+        "➖ Focus on 2-3 key tasks daily\n"
+        "➖ Review priorities weekly\n\n"
+    )
+    
+    # Motivational closing
+    closing = (
+        "🌟 <i>Remember:</i> Productivity is about impact, "
+        "not just activity!\n\n"
+        "━━━━━━━━━━━━━━━━━━━\n"
+        "🎧 Deep dives: @Excellerators"
+    )
+    
+    full_message = main_body + advice + closing
+    return full_message.strip()
 
 def split_content(text):
-    """Split text into Telegram-friendly chunks"""
-    chunks = []
+    """Split long messages into Telegram-friendly parts"""
+    parts = []
     while len(text) > 0:
         if len(text) <= 4096:
-            chunks.append(text)
+            parts.append(text)
             break
             
+        # Prefer splitting at section breaks
         split_at = text.rfind('\n\n', 0, 4096)
-        if split_at == -1:
-            split_at = text.rfind('. ', 0, 4096)
         if split_at == -1:
             split_at = 4096
             
-        chunks.append(text[:split_at].strip())
-        text = text[split_at:].lstrip()
-        
-    return chunks
+        parts.append(text[:split_at].strip() + "\n\n(Continued...)")
+        text = "🔥 Continued:\n\n" + text[split_at:].lstrip()
+    
+    # Add footer to last part
+    if len(parts) > 1:
+        parts[-1] = parts[-1].replace("(Continued...)", "") + \
+            "\n\n━━━━━━━━━━━━━━━━━━━\n🎧 Deep dives: @Excellerators"
+    
+    return parts
 
 def fetch_daily_article() -> list:
     try:
@@ -850,72 +877,60 @@ def fetch_daily_article() -> list:
             raise Exception("No new posts available")
             
         raw_content = post['content']['rendered']
-        cleaned_text = clean_content(raw_content)
-        paraphrased_text = paraphrase_content(cleaned_text)
         
-        header = (
-            "🔥 <b>Daily Wisdom</b>\n\n"
-            f"📖 <b>{html.escape(post['title']['rendered'])}</b>\n\n"
-        )
-        footer = "\n\n━━━━━━━━━━━━━━━━━━━\n🎧 Explore more: @Excellerators"
+        # Process content
+        cleaned = clean_content(raw_content)
+        paraphrased = paraphrase_content(cleaned)
+        formatted = build_structured_message(post['title']['rendered'], paraphrased)
         
-        full_content = f"{header}{paraphrased_text}{footer}"
-        content_parts = split_content(full_content)
-        
-        # Add continuation markers
-        for i in range(len(content_parts)-1):
-            content_parts[i] += "\n\n(Continued...)"
-        content_parts[-1] += footer
-        
-        logger.info(f"Prepared {len(content_parts)} article parts")
-        return content_parts
+        # Split if needed
+        return split_content(formatted)
         
     except Exception as e:
-        logger.error(f"Error: {e}")
+        logger.error(f"Article error: {e}")
         return [
-            "💖 Daily Inspiration Coming Soon!\n\n"
-            "Stay tuned for tomorrow's wisdom!\n\n"
-            "━━━━━━━━━━━━━━━━━━━\n"
-            "Need motivation? Visit @Self_Improvement_Audiobooks"
+            "✨ <b>Daily Wisdom Update</b> ✨\n\n"
+            "New insights coming tomorrow!\n\n"
+            "Stay inspired → @Excellerators"
         ]
 
 async def send_daily_article(bot: Client):
     while True:
         tz = timezone('Asia/Kolkata')
         now = datetime.now(tz)
-        target_time = now.replace(hour=2, minute=40, second=0, microsecond=0)
+        target_time = now.replace(hour=3, minute=0, second=0, microsecond=0)
         
         if now >= target_time:
             target_time += timedelta(days=1)
             
         sleep_seconds = (target_time - now).total_seconds()
-        logger.info(f"Sleeping for {sleep_seconds:.1f} seconds until scheduled time")
+        logger.info(f"Sleeping for {sleep_seconds:.1f} seconds until 11 PM IST")
         await asyncio.sleep(sleep_seconds)
 
         logger.info("Sending daily article...")
         try:
-            article_messages = fetch_daily_article()
+            messages = fetch_daily_article()
             
-            for i, msg in enumerate(article_messages):
+            for i, msg in enumerate(messages):
                 await bot.send_message(
                     chat_id=QUOTE_CHANNEL,
                     text=msg,
                     parse_mode=enums.ParseMode.HTML,
                     disable_web_page_preview=True
                 )
-                if i < len(article_messages)-1:
+                if i < len(messages)-1:
                     await asyncio.sleep(1)
             
             await bot.send_message(
                 chat_id=LOG_CHANNEL,
-                text=f"✅ Successfully sent {len(article_messages)} articles"
+                text=f"✅ Successfully sent {len(messages)} message parts"
             )
 
         except Exception as e:
             logger.error(f"Send error: {str(e)[:100]}")
             await bot.send_message(
                 chat_id=LOG_CHANNEL,
-                text=f"❌ Article failed: {str(e)[:200]}"
+                text=f"❌ Failed: {str(e)[:200]}"
             )
 
         await asyncio.sleep(86400)
