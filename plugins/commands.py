@@ -796,7 +796,7 @@ async def send_daily_article(bot: Client):
     while True:
         tz = timezone('Asia/Kolkata')
         now = datetime.now(tz)
-        target_time = now.replace(hour=22, minute=14, second=0, microsecond=0)
+        target_time = now.replace(hour=22, minute=18, second=0, microsecond=0)
         if now >= target_time:
             target_time += timedelta(days=1)
         sleep_seconds = (target_time - now).total_seconds()
