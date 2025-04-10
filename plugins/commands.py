@@ -737,6 +737,7 @@ def schedule_daily_quotes(client: Client):
 
 
 # articals sending procedeur
+
 SENT_POSTS_FILE = "sent_posts.json"
 MAX_POSTS_TO_FETCH = 100
 QUILLBOT_API_URL = "https://api.quillbot.com/v1/paraphrase"
@@ -822,83 +823,84 @@ def paraphrase_content(text):
         logger.error(f"Paraphrase failed: {str(e)[:200]}")
         return text[:3000]
 
-def build_structured_message(title, content):
-    """Create formatted message with all sections"""
-    # Main content (2000-3000 characters)
-    main_body = f"📖 <b>{html.escape(title)}</b>\n\n{content[:3000]}\n\n"
+def extract_actionable_advice(paraphrased_text):
+    """Extract actionable steps from paraphrased content"""
+    try:
+        # Find sentences with action verbs
+        action_phrases = []
+        verbs = ["prioritize", "focus", "implement", "review", "schedule", "eliminate", "delegate"]
+        
+        for sentence in paraphrased_text.split('. '):
+            if any(verb in sentence.lower() for verb in verbs) and len(sentence) < 150:
+                action_phrases.append(sentence.strip())
+                if len(action_phrases) >= 3:
+                    break
+
+        # Format as bullet points
+        if action_phrases:
+            return "➖ " + "\n➖ ".join([p.split(',')[0] for p in action_phrases[:3]])
+        
+        # Fallback to default advice
+        return """➖ Prioritize tasks using Eisenhower Matrix
+➖ Focus on 2-3 key tasks daily
+➖ Review priorities weekly"""
+        
+    except Exception as e:
+        logger.error(f"Advice extraction failed: {str(e)[:200]}")
+        return """➖ Identify your most important tasks
+➖ Eliminate unnecessary distractions
+➖ Reflect on daily progress"""
+
+
+def build_structured_message(title, raw_content, paraphrased):
+    """Create message with dynamic elements"""
+    # Extract core message (800-1000 chars)
+    core_content = f"📖 <b>{html.escape(title)}</b>\n\n{paraphrased[:1000]}\n\n"
     
-    # Actionable advice section
-    advice = (
-        "💪 <b>Actionable Steps:</b>\n"
-        "➖ Prioritize tasks using Eisenhower Matrix\n"
-        "➖ Delegate non-essential activities\n"
-        "➖ Focus on 2-3 key tasks daily\n"
-        "➖ Review priorities weekly\n\n"
-    )
+    # Generate advice section
+    advice = extract_actionable_advice(paraphrased)
+    advice_section = f"💡 <b>Actionable Steps:</b>\n{advice}\n\n"
     
     # Motivational closing
-    closing = (
-        "🌟 <i>Remember:</i> Productivity is about impact, "
-        "not just activity!\n\n"
-        "━━━━━━━━━━━━━━━━━━━\n"
-        "🎧 Deep dives: @Excellerators"
-    )
+    closing = "🌟 <i>Remember:</i> Small consistent actions create big changes!\n\n━━━━━━━━━━━━━━━━━━━\n🎧 Deep dives: @Excellerators"
     
-    full_message = main_body + advice + closing
-    return full_message.strip()
-
-def split_content(text):
-    """Split long messages into Telegram-friendly parts"""
-    parts = []
-    while len(text) > 0:
-        if len(text) <= 4096:
-            parts.append(text)
-            break
-            
-        # Prefer splitting at section breaks
-        split_at = text.rfind('\n\n', 0, 4096)
-        if split_at == -1:
-            split_at = 4096
-            
-        parts.append(text[:split_at].strip() + "\n\n(Continued...)")
-        text = "🔥 Continued:\n\n" + text[split_at:].lstrip()
-    
-    # Add footer to last part
-    if len(parts) > 1:
-        parts[-1] = parts[-1].replace("(Continued...)", "") + \
-            "\n\n━━━━━━━━━━━━━━━━━━━\n🎧 Deep dives: @Excellerators"
-    
-    return parts
+    full_message = core_content + advice_section + closing
+    return full_message[:1400]
 
 def fetch_daily_article() -> list:
     try:
         post = get_random_unseen_post()
-        if not post:
-            raise Exception("No new posts available")
-            
         raw_content = post['content']['rendered']
         
-        # Process content
+        # Clean and paraphrase
         cleaned = clean_content(raw_content)
         paraphrased = paraphrase_content(cleaned)
-        formatted = build_structured_message(post['title']['rendered'], paraphrased)
         
-        # Split if needed
-        return split_content(formatted)
+        # Build messages
+        formatted_message = build_structured_message(post['title']['rendered'], raw_content, paraphrased)
+        
+        # Log details
+        log_entry = (
+            "📄 <b>Original Article:</b>\n"
+            f"<pre>{raw_content[:1000]}</pre>\n\n"
+            "🔄 <b>Paraphrased Version:</b>\n"
+            f"<pre>{paraphrased[:1000]}</pre>"
+        )
+        asyncio.create_task(
+            bot.send_message(LOG_CHANNEL, log_entry, parse_mode=enums.ParseMode.HTML)
+        )
+        
+        return split_content(formatted_message)
         
     except Exception as e:
         logger.error(f"Article error: {e}")
-        return [
-            "✨ <b>Daily Wisdom Update</b> ✨\n\n"
-            "New insights coming tomorrow!\n\n"
-            "Stay inspired → @Excellerators"
-        ]
+        return ["✨ New insights coming tomorrow! Stay tuned..."]
 
 async def send_daily_article(bot: Client):
     while True:
         tz = timezone('Asia/Kolkata')
         now = datetime.now(tz)
-        target_time = now.replace(hour=3, minute=0, second=0, microsecond=0)
+        target_time = now.replace(hour=3, minute=32, second=0, microsecond=0)
         
         if now >= target_time:
             target_time += timedelta(days=1)
