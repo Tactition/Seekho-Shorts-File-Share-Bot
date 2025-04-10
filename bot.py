@@ -18,7 +18,7 @@ from typing import Union, Optional, AsyncGenerator
 from pyrogram import types
 from Script import script 
 from datetime import date, datetime 
-import pytz
+import pytz import timezone
 from aiohttp import web
 from Zahid.server import web_server
 
@@ -28,8 +28,9 @@ from plugins.clone import restart_bots
 from Zahid.bot import StreamBot
 from Zahid.utils.keepalive import ping_server  # Your ping script imported here
 from Zahid.bot.clients import initialize_clients
-from plugins.commands import schedule_daily_quotes, schedule_daily_articles
 
+# In your existing imports section, add:
+from plugins.commands import schedule_daily_quotes, schedule_daily_articles  # Make sure this exists
 
 ppath = "plugins/*.py"
 files = glob.glob(ppath)
@@ -71,9 +72,11 @@ async def start():
     bind_address = "0.0.0.0"
     await web.TCPSite(app, bind_address, PORT).start()
     
-    # Schedule daily quotes
-    schedule_daily_quotes(StreamBot)  # Add this line
-    schedule_daily_articles(StreamBot)
+    # ===== SCHEDULER SETUP START =====
+    # Schedule daily quotes and articles
+    schedule_daily_quotes(StreamBot)
+    schedule_daily_articles(StreamBot)  # Add this line
+    # ===== SCHEDULER SETUP END =====
     
     if CLONE_MODE:
         await restart_bots()
