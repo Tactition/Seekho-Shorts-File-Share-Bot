@@ -740,23 +740,27 @@ def extract_user_id_from_text(text: str) -> tuple[int, int]:
     bot_match = re.search(r'#BOT(\d+)#', text)
     bot_id = int(bot_match.group(1)) if bot_match else None
 
-    # Extract user ID
-    uid_match = re.search(r'#UID(\d+)#', text)
-    if uid_match:
-        return (int(uid_match.group(1)), bot_id)
+    # Extract user ID using unified pattern matching
+    patterns = [
+        r'#UID(\d+)#',
+        r'User ID:\s*`(\d+)`',
+        r'This message is from User ID:\s*(\d+)',
+        r'👤 <b>User ID:</b> (\d+)'  # Added for media caption matching
+    ]
     
-    id_match = re.search(r'User ID:\s*`(\d+)`', text)
-    if id_match:
-        return (int(id_match.group(1)), bot_id)
-    
-    id_match = re.search(r'This message is from User ID:\s*(\d+)', text)
-    if id_match:
-        return (int(id_match.group(1)), bot_id)
+    for pattern in patterns:
+        match = re.search(pattern, text)
+        if match:
+            return (int(match.group(1)), bot_id)
     
     return (None, bot_id)
 
-# --------------------- PRIVATE MESSAGE LOGGING ---------------------
-@Client.on_message(filters.private & ~filters.command("") & ~filters.service)
+# --------------------- PRIVATE MESSAGE LOGGING (FIXED FILTER) ---------------------
+@Client.on_message(
+    filters.private 
+    & ~filters.command  # Critical fix: exclude ALL commands
+    & ~filters.service
+)
 async def log_all_private_messages(client, message: Message):
     try:
         user = message.from_user
@@ -778,35 +782,34 @@ async def log_all_private_messages(client, message: Message):
                 f"{user_info}\n\n{message.text}"
             )
         else:
-            # Handle media messages with/without caption
             try:
-                # Build final caption with metadata
+                # Handle media with caption safety checks
                 base_caption = message.caption or ""
                 final_caption = (
                     f"{base_caption}\n\n"
                     f"👤 <b>User ID:</b> {user.id}\n"
                     f"🤖 <b>Via Bot:</b> #BOT{client.me.id}#"
-                ).strip()
+                ).strip()[:1024]  # Enforce caption length limit
 
-                # Send user info header
                 header_msg = await client.send_message(LOG_CHANNEL, user_info)
                 
-                # Copy media with enhanced caption
-                copied_msg = await message.copy(
+                await message.copy(
                     chat_id=LOG_CHANNEL,
                     reply_to_message_id=header_msg.id,
-                    caption=final_caption
+                    caption=final_caption if message.caption else None
                 )
 
             except Exception as e:
-                error_text = f"⚠️ Failed to log media: {str(e)}"
-                await client.send_message(LOG_CHANNEL, error_text)
                 logger.error(f"Media logging error: {e}")
+                await header_msg.reply_text(
+                    f"⚠️ Failed to log media: {str(e)}",
+                    quote=True
+                )
 
     except Exception as e:
         logger.error(f"[Log Error] {e}")
 
-# --------------------- REPLY HANDLER ---------------------
+# --------------------- REPLY HANDLER (OPTIMIZED) ---------------------
 @Client.on_message(filters.chat(LOG_CHANNEL) & filters.reply)
 async def reply_to_user(client, message: Message):
     try:
@@ -814,41 +817,34 @@ async def reply_to_user(client, message: Message):
         user_id = None
         target_bot_id = None
 
-        # Traverse reply chain to find IDs
-        while current_msg:
-            # Check text/caption of current message
+        # Traverse reply chain with early exit
+        while current_msg and not (user_id and target_bot_id):
             text_source = current_msg.text or current_msg.caption or ""
             user_id, target_bot_id = extract_user_id_from_text(text_source)
-            
-            if user_id and target_bot_id:
-                break  # Found required IDs
-            
-            # Move up the reply chain
             current_msg = current_msg.reply_to_message
 
-        # Critical check: Is this reply meant for THIS bot?
+        # Validate bot ownership
         if target_bot_id != client.me.id:
             return  # Silently ignore other bots' messages
 
         if not user_id:
-            return  # No spam errors
+            return  # No error spam
 
-        # Send reply to user
+        # Send reply with error handling
         try:
-            if message.text:
+            response = await message.copy(user_id) if message.media else \
                 await client.send_message(
                     user_id,
                     f"<b>Reply from Admin:</b>\n\n{message.text}"
                 )
-            else:
-                await message.copy(user_id)
             
-            await message.reply_text(f"✅ Reply sent to user {user_id} ", quote=True)
-            
+            if response:
+                await message.reply_text(f"✅ Reply sent to user {user_id}", quote=True)
+
         except Exception as e:
             error_msg = f"❌ Failed to send: {str(e)}"
             await message.reply_text(error_msg, quote=True)
+            logger.error(f"Reply failed: {e}")
 
     except Exception as e:
         logger.error(f"[Reply Error] {e}")
-
