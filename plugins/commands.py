@@ -738,9 +738,15 @@ def schedule_daily_quotes(client: Client):
 
 # ------------------------------------------------
 SENT_POSTS_FILE = "sent_posts.json"
-MAX_POSTS_TO_FETCH = 100
+MAX_POSTS_TO_FETCH = 25  # Reduced to prevent rate limiting
 QUILLBOT_API_URL = "https://api.quillbot.com/v1/paraphrase"
-# Initialize sent posts list
+
+class RequestTracker:
+    cache_posts = []
+    cache_time = datetime.now() - timedelta(seconds=3600)
+    last_request = None
+    request_count = 0
+
 try:
     with open(SENT_POSTS_FILE, "r") as f:
         sent_post_ids = json.load(f)
@@ -748,34 +754,84 @@ except (FileNotFoundError, json.JSONDecodeError):
     sent_post_ids = []
 
 def get_random_unseen_post():
-    """Fetch a random post that hasn't been sent before"""
+    """Fetch posts with rate limiting and caching"""
+    max_retries = 3
+    retry_delay = 30
+    cache_duration = 3600  # 1 hour cache
+    
     try:
-        response = requests.get(
-            "https://www.franksonnenbergonline.com/wp-json/wp/v2/posts",
-            params={
-                "per_page": MAX_POSTS_TO_FETCH,
-                "orderby": "date",
-                "order": "desc"
-            },
-            timeout=15
-        )
-        response.raise_for_status()
-        posts = response.json()
-        
-        unseen_posts = [p for p in posts if p['id'] not in sent_post_ids]
-        
-        if not unseen_posts:
-            sent_post_ids.clear()
-            unseen_posts = posts
-            
-        selected_post = random.choice(unseen_posts)
-        sent_post_ids.append(selected_post['id'])
-        
-        with open(SENT_POSTS_FILE, "w") as f:
-            json.dump(sent_post_ids[-MAX_POSTS_TO_FETCH:], f)
-            
-        return selected_post
-        
+        # Use cache if valid
+        if (datetime.now() - RequestTracker.cache_time).seconds < cache_duration:
+            if RequestTracker.cache_posts:
+                unseen = [p for p in RequestTracker.cache_posts if p['id'] not in sent_post_ids]
+                if not unseen:
+                    sent_post_ids.clear()
+                    unseen = RequestTracker.cache_posts
+                return random.choice(unseen)
+
+        # Rate limiting control
+        if RequestTracker.last_request:
+            elapsed = (datetime.now() - RequestTracker.last_request).seconds
+            if elapsed < 5:
+                time.sleep(5 - elapsed)
+
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+            'Accept': 'application/json',
+            'Accept-Language': 'en-US,en;q=0.5'
+        }
+
+        for attempt in range(max_retries):
+            try:
+                response = requests.get(
+                    "https://www.franksonnenbergonline.com/wp-json/wp/v2/posts",
+                    params={
+                        "per_page": MAX_POSTS_TO_FETCH,
+                        "orderby": "date",
+                        "order": "desc"
+                    },
+                    headers=headers,
+                    timeout=20
+                )
+
+                if response.status_code == 429:
+                    retry_after = int(response.headers.get('Retry-After', retry_delay))
+                    logger.warning(f"Rate limited. Retrying after {retry_after}s")
+                    time.sleep(retry_after)
+                    continue
+
+                response.raise_for_status()
+                posts = response.json()
+                
+                # Update cache
+                RequestTracker.cache_posts = posts
+                RequestTracker.cache_time = datetime.now()
+                RequestTracker.last_request = datetime.now()
+                
+                unseen_posts = [p for p in posts if p['id'] not in sent_post_ids]
+                
+                if not unseen_posts:
+                    sent_post_ids.clear()
+                    unseen_posts = posts
+                
+                selected = random.choice(unseen_posts)
+                sent_post_ids.append(selected['id'])
+                
+                with open(SENT_POSTS_FILE, "w") as f:
+                    json.dump(sent_post_ids[-MAX_POSTS_TO_FETCH:], f)
+                
+                return selected
+
+            except requests.exceptions.RequestException as e:
+                logger.warning(f"Attempt {attempt+1} failed: {str(e)[:200]}")
+                if attempt < max_retries - 1:
+                    sleep_time = retry_delay * (attempt + 1)
+                    logger.info(f"Retrying in {sleep_time}s...")
+                    time.sleep(sleep_time)
+                
+        logger.error("Max retries exceeded")
+        return None
+
     except Exception as e:
         logger.error(f"Error fetching posts: {e}")
         return None
@@ -959,7 +1015,7 @@ async def send_daily_article(bot: Client):
     while True:
         tz = timezone('Asia/Kolkata')
         now = datetime.now(tz)
-        target_time = now.replace(hour=13, minute=49, second=0, microsecond=0)
+        target_time = now.replace(hour=14, minute=28, second=0, microsecond=0)
         
         if now >= target_time:
             target_time += timedelta(days=1)
@@ -994,5 +1050,3 @@ async def send_daily_article(bot: Client):
 
 def schedule_daily_articles(client: Client):
     asyncio.create_task(send_daily_article(client))
-
-
