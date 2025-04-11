@@ -902,7 +902,7 @@ def build_structured_message(title, paraphrased):
 
 async def send_daily_article(bot: Client):
     """Scheduling system with IST timezone handling"""
-    tz = timezone('Asia/Kolkata'))
+    tz = timezone('Asia/Kolkata')
     while True:
         try:
             now = datetime.now(tz)
