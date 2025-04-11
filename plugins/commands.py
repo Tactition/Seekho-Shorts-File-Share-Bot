@@ -977,8 +977,50 @@ async def send_daily_article(bot: Client):
             )
         
         await asyncio.sleep(86400)  # 24 hours
+        
 
+@Client.on_message(filters.command('article'))
+async def instant_article_handler(client, message: Message):
+    """Handle immediate article requests via command"""
+    try:
+        # Reuse existing article generation flow
+        post = get_random_unseen_post()
+        if not post:
+            await message.reply("No articles available!")
+            return
+
+        raw_content = post['content']['rendered']
+        cleaned = clean_content(raw_content)
+        generated_title, paraphrased_text = paraphrase_content(cleaned, client)
+        
+        if not generated_title:  # Fallback to original title
+            generated_title = html.escape(post['title']['rendered'])
+
+        message = build_structured_message(generated_title, paraphrased_text)
+        
+        # Send to channel using existing formatting
+        await client.send_message(
+            chat_id=QUOTE_CHANNEL,
+            text=message,
+            parse_mode=enums.ParseMode.HTML,
+            disable_web_page_preview=True
+        )
+        
+        # Log success differently than scheduled posts
+        await client.send_message(
+            chat_id=LOG_CHANNEL,
+            text="🚀 Immediate article sent via command"
+        )
+
+    except Exception as e:
+        logger.error(f"Command Error: {str(e)[:200]}")
+        await client.send_message(
+            chat_id=LOG_CHANNEL,
+            text=f"⚠️ Command Failed: {html.escape(str(e)[:1000])}"
+        )
 
 def schedule_daily_articles(client: Client):
     """Start the daily article scheduler"""
     asyncio.create_task(send_daily_article(client))
+
+
