@@ -737,20 +737,6 @@ def schedule_daily_quotes(client: Client):
 
 
 # ------------------------------------------------
-import html
-import requests
-import asyncio
-import logging
-import random
-import re
-import json
-import time
-from datetime import datetime, timedelta
-from pytz import timezone
-from bs4 import BeautifulSoup
-from pyrogram import Client, enums
-
-logger = logging.getLogger(__name__)
 SENT_POSTS_FILE = "sent_posts.json"
 MAX_POSTS_TO_FETCH = 10
 QUILLBOT_API_URL = "https://api.quillbot.com/v1/paraphrase"
@@ -758,6 +744,7 @@ QUILLBOT_API_URL = "https://api.quillbot.com/v1/paraphrase"
 class RequestTracker:
     cache_posts = []
     cache_time = datetime.now() - timedelta(seconds=7200)
+    last_request = datetime.now() - timedelta(days=1)
     user_agents = [
         'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/118.0.0.0 Safari/537.36',
         'Mozilla/5.0 (Macintosh; Intel Mac OS X 14_0) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15',
@@ -771,7 +758,6 @@ except (FileNotFoundError, json.JSONDecodeError):
     sent_post_ids = []
 
 def get_random_unseen_post():
-    """Enhanced post fetcher with advanced rate limiting"""
     max_retries = 2
     base_delay = 60
     cache_duration = 7200
@@ -779,9 +765,11 @@ def get_random_unseen_post():
     try:
         if (datetime.now() - RequestTracker.cache_time).seconds < cache_duration:
             if RequestTracker.cache_posts:
-                return handle_post_selection(RequestTracker.cache_posts)
+                selected = handle_post_selection(RequestTracker.cache_posts)
+                if selected:
+                    return selected
 
-        if RequestTracker.last_request and (datetime.now() - RequestTracker.last_request).seconds < 10:
+        if (datetime.now() - RequestTracker.last_request).seconds < 10:
             time.sleep(10)
 
         headers = {
@@ -816,7 +804,7 @@ def get_random_unseen_post():
                 posts = response.json()
                 
                 if not posts:
-                    raise ValueError("Empty API response")
+                    raise ValueError("Empty API response - no posts available")
 
                 RequestTracker.cache_posts = posts
                 RequestTracker.cache_time = datetime.now()
@@ -841,15 +829,18 @@ def get_random_unseen_post():
         return None
 
 def handle_post_selection(posts):
-    """Smart post selection with cache management"""
+    if not posts:
+        logger.error("No posts available in cache")
+        return None
+    
     unseen_posts = [p for p in posts if p['id'] not in sent_post_ids]
     
     if not unseen_posts:
-        logger.info("Resetting sent posts and cache")
+        logger.info("Resetting sent posts and refreshing cache")
         sent_post_ids.clear()
         RequestTracker.cache_posts = []
         RequestTracker.cache_time = datetime.now() - timedelta(seconds=7200)
-        unseen_posts = posts
+        return None
     
     selected = random.choice(unseen_posts)
     sent_post_ids.append(selected['id'])
@@ -860,7 +851,6 @@ def handle_post_selection(posts):
     return selected
 
 def clean_content(content):
-    """Advanced content cleaner"""
     soup = BeautifulSoup(content, 'html.parser')
     
     selectors = [
@@ -885,7 +875,6 @@ def clean_content(content):
     return '\n\n'.join(paragraphs)
 
 def paraphrase_content(text, bot: Client):
-    """Intelligent paraphraser with enhanced logging"""
     try:
         asyncio.create_task(
             bot.send_message(
@@ -931,7 +920,6 @@ def paraphrase_content(text, bot: Client):
         return text[:5000]
 
 def extract_action_points(text):
-    """Smart action point extractor"""
     action_patterns = [
         r'\b(try|focus|prioritize|implement|avoid|start|begin|consider|make sure|ensure|remember)\b',
         r'\b(always|never)\b.+\.',
@@ -953,14 +941,13 @@ def extract_action_points(text):
         reverse=True
     )[:3]
     
-    return [f"• {s.rstrip('.!').capitalize()}" for s in selected] or [
+    return [f"• {s.rstrip('.!').capitalize()}" for s in selected] if selected else [
         "• Focus on your core priorities",
         "• Review daily progress",
         "• Eliminate one distraction"
     ]
 
 def format_content(text, max_words=400):
-    """Readability-focused formatter"""
     words = text.split()
     structured = []
     current_para = []
@@ -982,7 +969,6 @@ def format_content(text, max_words=400):
     return '\n\n'.join(structured)
 
 def build_structured_message(title, original, paraphrased):
-    """Professional message builder"""
     formatted_content = format_content(paraphrased)
     
     return (
@@ -999,7 +985,7 @@ def fetch_daily_article(bot: Client):
     try:
         post = get_random_unseen_post()
         if not post:
-            raise Exception("No new posts available")
+            raise Exception("No new posts available after cache refresh")
             
         raw_content = post['content']['rendered']
         cleaned = clean_content(raw_content)
@@ -1021,15 +1007,15 @@ def fetch_daily_article(bot: Client):
         logger.error(f"Processing error: {e}")
         return (
             "🌟 <b>Daily Insight Update</b> 🌟\n\n"
-            "Fresh perspectives coming tomorrow!\n\n"
-            "Stay motivated → @Excellerators"
+            "Content temporarily unavailable. New insights coming soon!\n\n"
+            "Stay tuned → @Excellerators"
         )
 
 async def send_daily_article(bot: Client):
     while True:
         tz = timezone('Asia/Kolkata')
         now = datetime.now(tz)
-        target_time = now.replace(hour=15, minute=18, second=0, microsecond=0)
+        target_time = now.replace(hour=15, minute=42, second=0, microsecond=0)
         
         if now >= target_time:
             target_time += timedelta(days=1)
@@ -1041,17 +1027,18 @@ async def send_daily_article(bot: Client):
         try:
             message = fetch_daily_article(bot)
             
-            await bot.send_message(
-                chat_id=QUOTE_CHANNEL,
-                text=message,
-                parse_mode=enums.ParseMode.HTML,
-                disable_web_page_preview=True
-            )
-            
-            await bot.send_message(
-                chat_id=LOG_CHANNEL,
-                text="✅ Successfully published daily article"
-            )
+            if message:
+                await bot.send_message(
+                    chat_id=QUOTE_CHANNEL,
+                    text=message,
+                    parse_mode=enums.ParseMode.HTML,
+                    disable_web_page_preview=True
+                )
+                
+                await bot.send_message(
+                    chat_id=LOG_CHANNEL,
+                    text="✅ Successfully published daily article"
+                )
 
         except Exception as e:
             logger.error(f"Send failed: {str(e)[:100]}")
