@@ -846,10 +846,10 @@ def paraphrase_content(text, bot: Client):
                     {
                         "role": "system",
                         "content": (
-                            "Rewrite this article in a motivational, inpirational and persuasive manner and the overall output must be between 1400 to 1800 characters"
+                            "Rewrite this article in a motivational, inpirational and persuasive manner and the overall output must be between 1600 to 2000 characters"
                             "Incorporate one quote or little paraphrased idea from renowned figures such as Albert Einstein, Friedrich Nietzsche, Ralph Waldo Emerson, Socrates, Plato, Aristotle, Kant, Descartes, Locke, Rousseau, Marx, de Beauvoir to Support the article based on the context"
                             "Encourage self-analysis and leveraging inherent strengths. "
-                            "Format your response so that the first line starts with 'Title:' followed by your generated title, Also the generated title should be unique, attractive, hooky title for the article. then an empty line, and then the article text in multiple paragraphs. "
+                            "Format your response so that the first line starts with 'Title:' followed by your generated title, Also the generated title should be unique, attractive, hooky title for the article. then an empty line, and then the article text in multiple paragraphs and then some key insights or acton points from the article in bullet Points to Sum up the article . "
                         )
                     },
                     {
@@ -921,8 +921,8 @@ def build_structured_message(title, paraphrased):
         f"<b>{final_title}</b>\n\n"
         f"{paraphrased}\n\n"
         "━━━━━━━━━━━━━━━━━━━━━━━━\n"
-        "💡 <i>Remember:</i> Consistent improvements lead to success!\n"
-        "Join @Excellerators for more"
+        "💡 <i>Remember:</i> Success is built on continuous improvement, and the fact that you're reading this article shows that dedication, setting you apart in a world of short attention spans.!\n"
+        "Explore @Excellerators for more Wisdom and Divine Knowledge"
     )
     return message
 
@@ -933,7 +933,7 @@ async def send_daily_article(bot: Client):
     while True:
         try:
             now = datetime.now(tz)
-            target_time = now.replace(hour=3, minute=49, second=20, microsecond=0)
+            target_time = now.replace(hour=4, minute=02, second=20, microsecond=0)
             
             if now >= target_time:
                 target_time += timedelta(days=1)
