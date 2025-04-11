@@ -740,6 +740,9 @@ def schedule_daily_quotes(client: Client):
 #______________________________
 # Configure logger (if not already defined globally)
 # Configure logger
+# Import Groq library
+from groq import Groq
+
 SENT_POSTS_FILE = "sent_posts.json"
 MAX_POSTS_TO_FETCH = 100
 
@@ -749,6 +752,7 @@ try:
         sent_post_ids = json.load(f)
 except (FileNotFoundError, json.JSONDecodeError):
     sent_post_ids = []
+
 
 def get_random_unseen_post():
     """Fetch a random post that hasn't been sent before."""
@@ -782,6 +786,7 @@ def get_random_unseen_post():
         logger.error(f"Error fetching posts: {e}")
         return None
 
+
 def clean_content(content):
     """Convert content to single paragraph with proper spacing"""
     try:
@@ -809,8 +814,9 @@ def clean_content(content):
         logger.error(f"Error cleaning content: {e}")
         return content
 
+
 def paraphrase_content(text, bot: Client):
-    """Handle paraphrasing with Groq API"""
+    """Handle paraphrasing with proper API key management using the Groq API"""
     try:
         # Log original content
         asyncio.create_task(
@@ -821,8 +827,13 @@ def paraphrase_content(text, bot: Client):
             )
         )
 
+        # Get API key from environment
+        groq_api_key = "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"
+        if not groq_api_key:
+            raise ValueError("Groq API key not found in environment variables")
+        
         # Initialize Groq client
-        client = "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"
+        client = Groq(api_key=groq_api_key)
 
         try:
             response = client.chat.completions.create(
@@ -841,11 +852,8 @@ def paraphrase_content(text, bot: Client):
                         "content": text
                     }
                 ],
-                model="llama3-70b-8192",
-                temperature=0.7,
-                max_tokens=2000,
-                top_p=1.0,
-                stream=False
+                model="llama-3.3-70b-versatile",
+                stream=False,
             )
 
             if response.choices[0].message.content:
@@ -865,7 +873,7 @@ def paraphrase_content(text, bot: Client):
                     parse_mode=enums.ParseMode.HTML
                 )
             )
-            return text  # Fallback
+            return text  # Fallback to original text
 
         # Log successful paraphrase
         asyncio.create_task(
@@ -889,6 +897,7 @@ def paraphrase_content(text, bot: Client):
         )
         return text
 
+
 def build_structured_message(title, paraphrased):
     """Build final message with proper formatting"""
     message = (
@@ -900,13 +909,14 @@ def build_structured_message(title, paraphrased):
     )
     return message
 
+
 async def send_daily_article(bot: Client):
     """Scheduling system with IST timezone handling"""
     tz = timezone('Asia/Kolkata')
     while True:
         try:
             now = datetime.now(tz)
-            target_time = now.replace(hour=1, minute=56, second=0, microsecond=0)
+            target_time = now.replace(hour=2, minute=10, second=0, microsecond=0)
             
             if now >= target_time:
                 target_time += timedelta(days=1)
@@ -945,6 +955,7 @@ async def send_daily_article(bot: Client):
             )
         
         await asyncio.sleep(86400)  # 24 hours
+
 
 def schedule_daily_articles(client: Client):
     """Start the daily article scheduler"""
