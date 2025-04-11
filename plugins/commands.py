@@ -740,12 +740,8 @@ def schedule_daily_quotes(client: Client):
 #______________________________
 # Configure logger (if not already defined globally)
 # Configure logger
-logger = logging.getLogger(__name__)
-logger.setLevel(logging.INFO)
-
 SENT_POSTS_FILE = "sent_posts.json"
 MAX_POSTS_TO_FETCH = 100
-DEEPSEEK_API_KEY = os.getenv("sk-a0c943871b3a4a928a4d114ef199fa06")
 
 # Initialize sent posts list
 try:
@@ -787,34 +783,34 @@ def get_random_unseen_post():
         return None
 
 def clean_content(content):
-    """Sanitize and clean HTML content."""
+    """Convert content to single paragraph with proper spacing"""
     try:
         soup = BeautifulSoup(content, 'html.parser')
-
-        # Remove unwanted tags
-        for tag in soup(["script", "style", "nav", "footer", "aside"]):
+        
+        # Remove unwanted elements
+        for tag in soup(["script", "style", "meta", "link", "nav", "footer", "aside"]):
             tag.decompose()
-
+            
         # Remove comments
         for comment in soup.find_all(text=lambda text: isinstance(text, Comment)):
             comment.extract()
 
-        # Remove empty elements
-        for element in soup.find_all():
-            if len(element.get_text(strip=True)) == 0:
-                element.decompose()
-
-        # Clean text
-        text = soup.get_text(separator='\n')
-        lines = (line.strip() for line in text.splitlines())
-        chunks = (phrase.strip() for line in lines for phrase in line.split("  "))
-        return '\n\n'.join(chunk for chunk in chunks if chunk)
+        # Get clean text and normalize whitespace
+        text = soup.get_text()
+        # Remove extra whitespace and create single paragraph
+        text = ' '.join(text.split())
+        # Fix spacing around punctuation
+        text = re.sub(r'\s+([.,!?])', r'\1', text)
+        text = re.sub(r'([.,!?])\s*', r'\1 ', text)
+        
+        return text.strip()
+        
     except Exception as e:
         logger.error(f"Error cleaning content: {e}")
         return content
 
 def paraphrase_content(text, bot: Client):
-    """Process text through DeepSeek API with enhanced error handling."""
+    """Handle paraphrasing with proper API key management"""
     try:
         # Log original content
         asyncio.create_task(
@@ -825,9 +821,14 @@ def paraphrase_content(text, bot: Client):
             )
         )
 
-        # Initialize DeepSeek client
+        # Get API key from environment
+        api_key = "sk-a0c943871b3a4a928a4d114ef199fa06"
+        if not api_key:
+            raise ValueError("DeepSeek API key not found in environment variables")
+
+        # Initialize client
         client = OpenAI(
-            api_key=DEEPSEEK_API_KEY,
+            api_key=api_key,
             base_url="https://api.deepseek.com"
         )
 
@@ -838,9 +839,10 @@ def paraphrase_content(text, bot: Client):
                     {
                         "role": "system",
                         "content": (
-                            "Rewrite this article concisely while keeping core message. "
-                            "Use motivational and inspirational tone. Maintain natural flow. "
-                            "Keep around 1400 words. Ensure human-like writing quality."
+                            "Rewrite this article concisely in one paragraph. "
+                            "Use motivational tone, keep core message. "
+                            "Ensure natural human writing style with proper punctuation. "
+                            "Avoid markdown formatting."
                         )
                     },
                     {
@@ -856,6 +858,9 @@ def paraphrase_content(text, bot: Client):
 
             if response.choices[0].message.content:
                 paraphrased = response.choices[0].message.content
+                # Clean API response
+                paraphrased = ' '.join(paraphrased.split())
+                paraphrased = re.sub(r'\s+([.,!?])', r'\1', paraphrased)
             else:
                 raise Exception("Empty API response")
 
@@ -892,72 +897,24 @@ def paraphrase_content(text, bot: Client):
         )
         return text
 
-def trim_to_word_count(text, word_limit=1400):
-    """Smart truncation preserving paragraphs."""
-    paragraphs = text.split('\n\n')
-    word_count = 0
-    result = []
-    
-    for para in paragraphs:
-        words = para.split()
-        if word_count + len(words) > word_limit:
-            remaining = word_limit - word_count
-            result.append(' '.join(words[:remaining]))
-            break
-        result.append(para)
-        word_count += len(words)
-    
-    return '\n\n'.join(result)
-
 def build_structured_message(title, paraphrased):
-    """Build final message with proper formatting."""
+    """Build final message with proper formatting"""
     message = (
         f"📚 <b>{html.escape(title)}</b>\n\n"
         f"{paraphrased}\n\n"
         "━━━━━━━━━━━━━━━━━━━━━━━━\n"
-        "💡 <i>Remember:</i> Consistent small improvements lead to remarkable results!\n\n"
-        "Explore more → @Excellerators"
+        "💡 <i>Remember:</i> Consistent improvements lead to success!\n"
+        "Join @Excellerators for more"
     )
-    return trim_to_word_count(message)
-
-def fetch_daily_article(bot: Client):
-    """Main article processing pipeline."""
-    try:
-        post = get_random_unseen_post()
-        if not post:
-            raise Exception("No new posts available")
-
-        raw_content = post['content']['rendered']
-        cleaned = clean_content(raw_content)
-
-        # Log cleaning result
-        asyncio.create_task(
-            bot.send_message(
-                chat_id=LOG_CHANNEL,
-                text=f"🧹 <b>Cleaned Content:</b>\n<pre>{html.escape(cleaned[:3000])}</pre>",
-                parse_mode=enums.ParseMode.HTML
-            )
-        )
-
-        paraphrased = paraphrase_content(cleaned, bot)
-        title = html.escape(post['title']['rendered'])
-        return build_structured_message(title, paraphrased)
-
-    except Exception as e:
-        logger.error(f"Article Error: {e}")
-        return (
-            "🌟 <b>Daily Insight Update</b> 🌟\n\n"
-            "New wisdom coming tomorrow!\n\n"
-            "Stay motivated → @Excellerators"
-        )
+    return message
 
 async def send_daily_article(bot: Client):
-    """Scheduling system with IST timezone handling."""
+    """Scheduling system with IST timezone handling"""
     tz = timezone('Asia/Kolkata')
     while True:
         try:
             now = datetime.now(tz)
-            target_time = now.replace(hour=1, minute=16, second=0, microsecond=0)
+            target_time = now.replace(hour=1, minute=30, second=0, microsecond=0)
             
             if now >= target_time:
                 target_time += timedelta(days=1)
@@ -967,7 +924,15 @@ async def send_daily_article(bot: Client):
             await asyncio.sleep(wait_seconds)
 
             logger.info("Processing daily article...")
-            message = fetch_daily_article(bot)
+            post = get_random_unseen_post()
+            if not post:
+                raise Exception("No new posts available")
+
+            raw_content = post['content']['rendered']
+            cleaned = clean_content(raw_content)
+            paraphrased = paraphrase_content(cleaned, bot)
+            title = html.escape(post['title']['rendered'])
+            message = build_structured_message(title, paraphrased)
             
             await bot.send_message(
                 chat_id=QUOTE_CHANNEL,
@@ -990,5 +955,5 @@ async def send_daily_article(bot: Client):
         await asyncio.sleep(86400)  # 24 hours
 
 def schedule_daily_articles(client: Client):
-    """Start the daily article scheduler."""
+    """Start the daily article scheduler"""
     asyncio.create_task(send_daily_article(client))
