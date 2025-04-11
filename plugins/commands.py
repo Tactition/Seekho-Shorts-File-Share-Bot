@@ -738,19 +738,10 @@ def schedule_daily_quotes(client: Client):
 
 # ------------------------------------------------
 SENT_POSTS_FILE = "sent_posts.json"
-MAX_POSTS_TO_FETCH = 10
+MAX_POSTS_TO_FETCH = 100
 QUILLBOT_API_URL = "https://api.quillbot.com/v1/paraphrase"
 
-class RequestTracker:
-    cache_posts = []
-    cache_time = datetime.now() - timedelta(seconds=7200)
-    last_request = datetime.now() - timedelta(days=1)
-    user_agents = [
-        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/118.0.0.0 Safari/537.36',
-        'Mozilla/5.0 (Macintosh; Intel Mac OS X 14_0) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15',
-        'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0_2 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1'
-    ]
-
+# Initialize sent posts list
 try:
     with open(SENT_POSTS_FILE, "r") as f:
         sent_post_ids = json.load(f)
@@ -758,242 +749,179 @@ except (FileNotFoundError, json.JSONDecodeError):
     sent_post_ids = []
 
 def get_random_unseen_post():
-    max_retries = 2
-    base_delay = 60
-    cache_duration = 7200
-    
+    """Fetch a random post that hasn't been sent before"""
     try:
-        if (datetime.now() - RequestTracker.cache_time).seconds < cache_duration:
-            if RequestTracker.cache_posts:
-                selected = handle_post_selection(RequestTracker.cache_posts)
-                if selected:
-                    return selected
-
-        if (datetime.now() - RequestTracker.last_request).seconds < 10:
-            time.sleep(10)
-
-        headers = {
-            'User-Agent': random.choice(RequestTracker.user_agents),
-            'Accept': 'application/json',
-            'Accept-Language': 'en-US,en;q=0.9',
-            'Referer': 'https://www.franksonnenbergonline.com/blog/',
-            'Accept-Encoding': 'gzip, deflate, br'
-        }
-
-        for attempt in range(max_retries):
-            try:
-                response = requests.get(
-                    "https://www.franksonnenbergonline.com/wp-json/wp/v2/posts",
-                    params={
-                        "per_page": MAX_POSTS_TO_FETCH,
-                        "orderby": "date",
-                        "order": "desc",
-                        "_cache": int(time.time())
-                    },
-                    headers=headers,
-                    timeout=25
-                )
-
-                if response.status_code == 429:
-                    retry_after = int(response.headers.get('Retry-After', base_delay * (attempt + 1)))
-                    logger.warning(f"Rate limited. Retrying after {retry_after}s (Attempt {attempt+1})")
-                    time.sleep(retry_after)
-                    continue
-
-                response.raise_for_status()
-                posts = response.json()
-                
-                if not posts:
-                    raise ValueError("Empty API response - no posts available")
-
-                RequestTracker.cache_posts = posts
-                RequestTracker.cache_time = datetime.now()
-                RequestTracker.last_request = datetime.now()
-                
-                return handle_post_selection(posts)
-
-            except requests.exceptions.RequestException as e:
-                logger.warning(f"Attempt {attempt+1} failed: {str(e)[:200]}")
-                if attempt < max_retries - 1:
-                    sleep_time = base_delay * (2 ** attempt)
-                    logger.info(f"Retrying in {sleep_time}s...")
-                    time.sleep(sleep_time)
-                    RequestTracker.cache_posts = []
-                    RequestTracker.cache_time = datetime.now() - timedelta(seconds=7200)
-                
-        logger.error("Max retries exceeded")
-        return None
-
+        response = requests.get(
+            "https://www.franksonnenbergonline.com/wp-json/wp/v2/posts",
+            params={
+                "per_page": MAX_POSTS_TO_FETCH,
+                "orderby": "date",
+                "order": "desc"
+            },
+            timeout=15
+        )
+        response.raise_for_status()
+        posts = response.json()
+        
+        unseen_posts = [p for p in posts if p['id'] not in sent_post_ids]
+        
+        if not unseen_posts:
+            sent_post_ids.clear()
+            unseen_posts = posts
+            
+        selected_post = random.choice(unseen_posts)
+        sent_post_ids.append(selected_post['id'])
+        
+        with open(SENT_POSTS_FILE, "w") as f:
+            json.dump(sent_post_ids[-MAX_POSTS_TO_FETCH:], f)
+            
+        return selected_post
+        
     except Exception as e:
-        logger.error(f"Critical fetch error: {e}")
+        logger.error(f"Error fetching posts: {e}")
         return None
-
-def handle_post_selection(posts):
-    if not posts:
-        logger.error("No posts available in cache")
-        return None
-    
-    unseen_posts = [p for p in posts if p['id'] not in sent_post_ids]
-    
-    if not unseen_posts:
-        logger.info("Resetting sent posts and refreshing cache")
-        sent_post_ids.clear()
-        RequestTracker.cache_posts = []
-        RequestTracker.cache_time = datetime.now() - timedelta(seconds=7200)
-        return None
-    
-    selected = random.choice(unseen_posts)
-    sent_post_ids.append(selected['id'])
-    
-    with open(SENT_POSTS_FILE, "w") as f:
-        json.dump(sent_post_ids[-MAX_POSTS_TO_FETCH:], f)
-    
-    return selected
 
 def clean_content(content):
+    """Improved content cleaning with paragraph preservation"""
     soup = BeautifulSoup(content, 'html.parser')
     
-    selectors = [
-        'div.sharedaddy', 'section.comments', 
-        'div.subscribe-box', 'div.author-box',
-        'aside.widget', 'footer.article-footer'
-    ]
-    for selector in selectors:
-        for element in soup.select(selector):
+    # Remove unwanted sections
+    unwanted = ['comment', 'share', 'subscribe', 'related posts', 'leave a reply']
+    for element in soup.find_all():
+        if any(keyword in element.get_text().lower() for keyword in unwanted):
             element.decompose()
     
+    # Extract and preserve meaningful paragraphs
     paragraphs = []
-    for element in soup.find_all(['p', 'ul', 'ol']):
-        if element.name in ['ul', 'ol']:
-            list_items = [f"• {li.get_text(strip=True)}" for li in element.find_all('li')]
-            paragraphs.append('\n'.join(list_items))
-        else:
-            text = element.get_text(strip=True)
-            if len(text) > 40:
-                paragraphs.append(text)
+    for p in soup.find_all('p'):
+        text = p.get_text(strip=True)
+        if len(text) > 40 and not re.search(r'^\W+$', text):
+            paragraphs.append(text)
     
     return '\n\n'.join(paragraphs)
 
 def paraphrase_content(text, bot: Client):
+    """Enhanced paraphrasing with full logging"""
     try:
+        # Log original content before sending to API
         asyncio.create_task(
             bot.send_message(
                 chat_id=LOG_CHANNEL,
-                text=f"📄 <b>Original Content:</b>\n<pre>{html.escape(text[:3000])}</pre>",
+                text=f"📨 <b>Original Content Sent to API:</b>\n"
+                     f"<pre>{html.escape(text[:3000])}</pre>",
                 parse_mode=enums.ParseMode.HTML
             )
         )
         
-        paras = text.split('\n\n')
-        processed = []
-        for chunk in paras[:4]:
-            response = requests.post(
-                QUILLBOT_API_URL,
-                json={
-                    "text": chunk[:2000],
-                    "strength": 1.3,
-                    "formality": "formal",
-                    "intent": "fluency",
-                    "autoflip": "off"
-                },
-                timeout=20
-            )
-            if response.status_code == 200:
-                processed.append(response.json().get("data", {}).get("paraphrased", chunk))
-            else:
-                processed.append(chunk)
+        # Send larger chunks while staying under API limits
+        chunk_size = 5000
+        response = requests.post(
+            QUILLBOT_API_URL,
+            json={
+                "text": text[:chunk_size],
+                "strength": 2,
+                "formality": "formal",
+                "intent": "maintain",
+                "autoflip": "on"
+            },
+            timeout=25
+        )
         
-        final_content = '\n\n'.join(processed + paras[4:5])
+        paraphrased = text[:chunk_size]  # Fallback
+        if response.status_code == 200:
+            paraphrased = response.json().get("data", {}).get("paraphrased", paraphrased)
+            # Preserve paragraph breaks
+            paraphrased = '\n\n'.join([p.strip() for p in paraphrased.split('\n') if p.strip()])
         
+        # Log API response
         asyncio.create_task(
             bot.send_message(
                 chat_id=LOG_CHANNEL,
-                text=f"🔄 <b>Processed Content:</b>\n<pre>{html.escape(final_content[:3000])}</pre>",
+                text=f"📩 <b>API Response Received:</b>\n"
+                     f"<pre>{html.escape(paraphrased[:3000])}</pre>",
                 parse_mode=enums.ParseMode.HTML
             )
         )
-        
-        return final_content[:5000]
-        
+            
+        return paraphrased
     except Exception as e:
-        logger.error(f"Paraphrase error: {str(e)[:200]}")
-        return text[:5000]
+        logger.error(f"Paraphrase failed: {str(e)[:200]}")
+        return text[:chunk_size]
 
 def extract_action_points(text):
-    action_patterns = [
-        r'\b(try|focus|prioritize|implement|avoid|start|begin|consider|make sure|ensure|remember)\b',
-        r'\b(always|never)\b.+\.',
-        r'.*\bis crucial\b.*',
-        r'.*\bimportant to\b.*'
-    ]
+    """Improved action point extraction"""
+    # Find imperative sentences with better matching
+    sentences = re.split(r'(?<=[.!?]) +', text)
+    action_points = [
+        s.strip() for s in sentences 
+        if re.match(r'^(Try|Focus|Prioritize|Avoid|Implement|Start|Begin|Consider)', s, re.IGNORECASE)
+        and 20 < len(s) < 120
+    ][:3]
     
-    candidates = []
-    for para in text.split('\n\n')[:3]:
-        sentences = re.split(r'(?<=[.!?]) +', para)
-        for sentence in sentences:
-            if any(re.search(pattern, sentence, re.IGNORECASE) for pattern in action_patterns):
-                clean_sent = re.sub(r'^"|"$', '', sentence.strip())
-                candidates.append(clean_sent)
-    
-    selected = sorted(
-        [s for s in candidates if 20 < len(s) < 120],
-        key=lambda x: len(x),
-        reverse=True
-    )[:3]
-    
-    return [f"• {s.rstrip('.!').capitalize()}" for s in selected] if selected else [
-        "• Focus on your core priorities",
-        "• Review daily progress",
+    # Format as bullets with better fallback
+    return [f"• {p.rstrip('.!').capitalize()}" for p in action_points] if action_points else [
+        "• Focus on your top priorities",
+        "• Review your daily progress",
         "• Eliminate one distraction"
     ]
 
-def format_content(text, max_words=400):
-    words = text.split()
-    structured = []
+def format_paragraphs(text, max_length=1000):
+    """Format text into readable paragraphs"""
+    paragraphs = []
     current_para = []
-    word_count = 0
+    current_length = 0
     
-    for word in words:
-        if word_count >= max_words:
+    for sentence in re.split(r'(?<=[.!?]) +', text):
+        if current_length + len(sentence) > max_length:
             break
-        current_para.append(word)
-        word_count += 1
-        
-        if word.endswith(('.', '!', '?')) and word_count % 100 < 5:
-            structured.append(' '.join(current_para))
+        if len(sentence) > 40:
+            current_para.append(sentence)
+            current_length += len(sentence)
+        if len(current_para) >= 3:  # Max 3 sentences per paragraph
+            paragraphs.append(' '.join(current_para))
             current_para = []
     
-    if current_para and word_count < max_words + 20:
-        structured.append(' '.join(current_para))
+    if current_para:
+        paragraphs.append(' '.join(current_para))
     
-    return '\n\n'.join(structured)
+    return '\n\n'.join(paragraphs)
 
-def build_structured_message(title, original, paraphrased):
-    formatted_content = format_content(paraphrased)
+def build_structured_message(title, main_content, raw_content, paraphrased):
+    """Professional message formatting with paragraph structure"""
+    # Process paraphrased text into formatted paragraphs
+    formatted_paraphrased = format_paragraphs(paraphrased)
     
-    return (
-        f"📘 <b>{html.escape(title)}</b>\n\n"
-        f"{formatted_content}\n\n"
-        "🔑 <b>Action Plan:</b>\n"
-        f"{chr(10).join(extract_action_points(original))}\n\n"
+    # Extract action points from original content
+    action_points = extract_action_points(main_content)
+    
+    # Build main message
+    message = (
+        f"📚 <b>{html.escape(title)}</b>\n\n"
+        f"{formatted_paraphrased}\n\n"
+        "🔑 <b>Key Actions to Implement:</b>\n"
+        f"{chr(10).join(action_points)}\n\n"
         "━━━━━━━━━━━━━━━━━━━━━━━━\n"
-        "💬 <i>Remember:</i> Progress comes from consistent action!\n"
-        "Join discussion → @Excellerators"
-    )[:4096]
+        "💡 <i>Remember:</i> Consistent small improvements lead to remarkable results!\n\n"
+        "Explore more → @Excellerators"
+    )
+    
+    return message[:4096]  # Telegram message limit
 
 def fetch_daily_article(bot: Client):
     try:
         post = get_random_unseen_post()
         if not post:
-            raise Exception("No new posts available after cache refresh")
+            raise Exception("No new posts available")
             
         raw_content = post['content']['rendered']
         cleaned = clean_content(raw_content)
         
+        # Log cleaned content before paraphrasing
         asyncio.create_task(
             bot.send_message(
                 chat_id=LOG_CHANNEL,
-                text=f"🧼 <b>Cleaned Content:</b>\n<pre>{html.escape(cleaned[:3000])}</pre>",
+                text=f"🧹 <b>Cleaned Content:</b>\n"
+                     f"<pre>{html.escape(cleaned[:3000])}</pre>",
                 parse_mode=enums.ParseMode.HTML
             )
         )
@@ -1001,53 +929,53 @@ def fetch_daily_article(bot: Client):
         paraphrased = paraphrase_content(cleaned, bot)
         title = html.escape(post['title']['rendered'])
         
-        return build_structured_message(title, cleaned, paraphrased)
+        return build_structured_message(title, cleaned, raw_content, paraphrased)
         
     except Exception as e:
-        logger.error(f"Processing error: {e}")
+        logger.error(f"Article error: {e}")
         return (
             "🌟 <b>Daily Insight Update</b> 🌟\n\n"
-            "Content temporarily unavailable. New insights coming soon!\n\n"
-            "Stay tuned → @Excellerators"
+            "New wisdom coming tomorrow!\n\n"
+            "Stay motivated → @Excellerators"
         )
 
 async def send_daily_article(bot: Client):
     while True:
         tz = timezone('Asia/Kolkata')
         now = datetime.now(tz)
-        target_time = now.replace(hour=15, minute=50, second=0, microsecond=0)
+        target_time = now.replace(hour=4, minute=29, second=0, microsecond=0)
         
         if now >= target_time:
             target_time += timedelta(days=1)
             
         sleep_seconds = (target_time - now).total_seconds()
-        logger.info(f"Next post in {sleep_seconds/3600:.1f} hours")
+        logger.info(f"Sleeping for {sleep_seconds:.1f} seconds until 11 PM IST")
         await asyncio.sleep(sleep_seconds)
 
+        logger.info("Sending daily article...")
         try:
             message = fetch_daily_article(bot)
             
-            if message:
-                await bot.send_message(
-                    chat_id=QUOTE_CHANNEL,
-                    text=message,
-                    parse_mode=enums.ParseMode.HTML,
-                    disable_web_page_preview=True
-                )
-                
-                await bot.send_message(
-                    chat_id=LOG_CHANNEL,
-                    text="✅ Successfully published daily article"
-                )
-
-        except Exception as e:
-            logger.error(f"Send failed: {str(e)[:100]}")
+            await bot.send_message(
+                chat_id=QUOTE_CHANNEL,
+                text=message,
+                parse_mode=enums.ParseMode.HTML,
+                disable_web_page_preview=True
+            )
+            
             await bot.send_message(
                 chat_id=LOG_CHANNEL,
-                text=f"❌ Failure: {str(e)[:200]}"
+                text="✅ Successfully sent daily article"
             )
 
-        await asyncio.sleep(3600)
+        except Exception as e:
+            logger.error(f"Send error: {str(e)[:100]}")
+            await bot.send_message(
+                chat_id=LOG_CHANNEL,
+                text=f"❌ Failed: {str(e)[:200]}"
+            )
+
+        await asyncio.sleep(86400)
 
 def schedule_daily_articles(client: Client):
     asyncio.create_task(send_daily_article(client))
