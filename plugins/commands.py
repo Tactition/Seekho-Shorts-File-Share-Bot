@@ -740,7 +740,6 @@ def schedule_daily_quotes(client: Client):
 
 # Configure logger (if not already defined globally)
 
-
 SENT_POSTS_FILE = "sent_posts.json"
 MAX_POSTS_TO_FETCH = 100
 QUILLBOT_API_URL = "https://api.quillbot.com/v1/paraphrase"
@@ -826,8 +825,9 @@ def clean_content(content):
 def paraphrase_content(text, bot: Client):
     """
     Sends the full sanitized text to the paraphrasing API in chunks.
-    A clear instruction is prepended so that the API returns a concise, motivational,
-    and inspirational rephrasing of the article.
+    A clear instruction is prepended so that the API returns a concise,
+    motivational and inspirational version while preserving natural paragraphs,
+    limited to a maximum of 1400 words.
     """
     try:
         # Log the original content (limit to avoid overly large logs)
@@ -839,19 +839,19 @@ def paraphrase_content(text, bot: Client):
             )
         )
 
-        # Define maximum chunk size (accounting for extra instruction text)
+        # Define maximum chunk size (accounting for the extra instruction text)
         chunk_size = 5000
         instruction_prompt = (
             "Rewrite the following article in a concise, to-the-point manner. "
-            "Make the response motivational, inspirational, and engaging, "
-            "keeping it relevant to the original content and not too long.\n\n"
+            "Make the response motivational, inspirational, and engaging. "
+            "Preserve the natural paragraph structure without breaking paragraphs arbitrarily. "
+            "Limit the output to a maximum of 1400 words.\n\n"
         )
 
         chunks = []
         # Process the full text in chunks if needed
         for i in range(0, len(text), chunk_size):
             chunk = text[i:i + chunk_size]
-            # Prepend the instruction for each chunk
             prompt_text = instruction_prompt + chunk
             try:
                 response = requests.post(
@@ -866,7 +866,6 @@ def paraphrase_content(text, bot: Client):
                     timeout=25
                 )
                 if response.status_code == 200:
-                    # Assume the API returns a JSON with a nested "paraphrased" key
                     paraphrased_chunk = response.json().get("data", {}).get("paraphrased", prompt_text)
                 else:
                     logger.error(f"Paraphrasing API error {response.status_code}: {response.text}")
@@ -875,16 +874,17 @@ def paraphrase_content(text, bot: Client):
                 logger.error(f"Paraphrase API call failed for chunk starting at {i}: {api_e}")
                 paraphrased_chunk = prompt_text
 
-            # Remove the instruction text from the result if it's repeated
+            # Remove the instruction text from the result if present
             if paraphrased_chunk.startswith(instruction_prompt):
                 paraphrased_chunk = paraphrased_chunk[len(instruction_prompt):].strip()
-            # Preserve paragraph breaks in the paraphrased text
-            paraphrased_chunk = "\n\n".join([p.strip() for p in paraphrased_chunk.split('\n') if p.strip()])
+
+            # We trust the API to preserve natural paragraphs now,
+            # so no additional reflowing is done here.
             chunks.append(paraphrased_chunk)
 
         full_paraphrased = "\n\n".join(chunks)
 
-        # Log the paraphrased content (limit length)
+        # Log the paraphrased content (limit the logged length)
         asyncio.create_task(
             bot.send_message(
                 chat_id=LOG_CHANNEL,
@@ -900,34 +900,33 @@ def paraphrase_content(text, bot: Client):
         return text
 
 
-def format_paragraphs(text):
+def trim_message(text, limit=4096):
     """
-    Formats text into logical paragraphs by preserving the existing paragraph breaks.
-    If the text exceeds Telegram's character limit, it trims at paragraph boundaries.
+    Trims the message to the Telegram limit without breaking a paragraph in the middle if possible.
     """
-    paragraphs = text.strip().split("\n\n")
-    formatted_message = ""
-    
-    for para in paragraphs:
-        para = para.strip()
-        if para:
-            if len(formatted_message) + len(para) + 2 > 4096:
-                break
-            formatted_message += para + "\n\n"
-    return formatted_message.strip()
+    if len(text) <= limit:
+        return text
+    # Find the last newline before the limit
+    pos = text[:limit].rfind("\n")
+    if pos == -1:
+        return text[:limit]
+    return text[:pos]
 
 
 def build_structured_message(title, main_content, raw_content, paraphrased):
-    """Builds the final message with structured content for Telegram posting."""
-    formatted_paraphrased = format_paragraphs(paraphrased)
+    """
+    Builds the final message with the article title and the paraphrased content.
+    Uses the API output as-is (with preserved natural paragraphs) and trims
+    it to Telegram's message limit.
+    """
     message = (
         f"📚 <b>{html.escape(title)}</b>\n\n"
-        f"{formatted_paraphrased}\n\n"
+        f"{paraphrased}\n\n"
         "━━━━━━━━━━━━━━━━━━━━━━━━\n"
         "💡 <i>Remember:</i> Consistent small improvements lead to remarkable results!\n\n"
         "Explore more → @Excellerators"
     )
-    return message[:4096]  # Ensure the message does not exceed Telegram's limit
+    return trim_message(message, 4096)
 
 
 def fetch_daily_article(bot: Client):
@@ -935,8 +934,9 @@ def fetch_daily_article(bot: Client):
     Fetches and processes an article:
       - Retrieves a random unseen post.
       - Sanitizes (cleans) the full article content.
-      - Sends the cleaned text to the paraphrasing API with a prompt for a concise, inspirational version.
-      - Builds a structured message for posting.
+      - Sends the cleaned text to the paraphrasing API with a prompt for a concise,
+        inspirational version limited to 1400 words.
+      - Builds a structured message for Telegram posting.
     """
     try:
         post = get_random_unseen_post()
@@ -972,7 +972,7 @@ async def send_daily_article(bot: Client):
     while True:
         tz = timezone('Asia/Kolkata')
         now = datetime.now(tz)
-        target_time = now.replace(hour=22, minute=34, second=0, microsecond=0)
+        target_time = now.replace(hour=22, minute=47, second=0, microsecond=0)
 
         if now >= target_time:
             target_time += timedelta(days=1)
