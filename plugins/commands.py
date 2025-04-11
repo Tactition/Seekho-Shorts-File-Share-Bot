@@ -970,7 +970,7 @@ def fetch_and_send_article_via_chatgpt(bot: "Client"):
 
 
 # Optionally, schedule this new workflow without interfering with existing bot schedules:
-async def schedule_chatgpt_articles(bot: "Client"):
+async def schedule_daily_articles(bot: "Client"):
     while True:
         # Example: set your target time (here: 11 PM IST)
         tz = timezone('Asia/Kolkata')
