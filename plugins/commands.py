@@ -736,28 +736,108 @@ def schedule_daily_quotes(client: Client):
 
 
 # ------------------------------------------------
+
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
+from selenium.common.exceptions import TimeoutException
 
-# Constants and file names
+# Configure logging
+logger = logging.getLogger(__name__)
 SENT_POSTS_FILE = "sent_posts.json"
-MAX_POSTS_TO_FETCH = 100
-CHATGPT_URL = "https://chat.openai.com"  # ChatGPT Web interface URL
+MAX_POSTS_TO_FETCH = 50
+CHATGPT_URL = "https://chat.openai.com/"
 
+class ChatGPTProcessor:
+    def __init__(self):
+        self.driver = None
+        self.setup_driver()
+        
+    def setup_driver(self):
+        options = webdriver.ChromeOptions()
+        options.add_argument("--headless=new")
+        options.add_argument("--disable-gpu")
+        options.add_argument("--no-sandbox")
+        self.driver = webdriver.Chrome(options=options)
+        
+    def process_content(self, text):
+        try:
+            self.driver.get(f"{CHATGPT_URL}?public_access=true")
+            text = text[:15000]  # Truncate to 15k characters
+            
+            prompt = f"""Process this article and provide:
+            1. Three key insights (bullet points)
+            2. Three actionable steps (numbered list)
+            3. A short summary (1-2 sentences)
+            
+            Article: {text}"""
+            
+            # Wait for and interact with public interface
+            input_box = WebDriverWait(self.driver, 30).until(
+                EC.presence_of_element_located((By.CSS_SELECTOR, "div.public-input textarea"))
+            )
+            input_box.send_keys(prompt)
+            input_box.submit()
+            
+            # Wait for response
+            WebDriverWait(self.driver, 45).until(
+                EC.presence_of_element_located((By.CSS_SELECTOR, "div.public-response.completed"))
+            )
+            
+            # Get response text
+            response_element = self.driver.find_element(By.CSS_SELECTOR, "div.public-content")
+            response_text = response_element.text
+            
+            return self.parse_response(response_text)
+            
+        except Exception as e:
+            logger.error(f"ChatGPT processing failed: {str(e)}")
+            return None
+        finally:
+            self.driver.quit()
+            
+    def parse_response(self, response):
+        sections = {
+            "Key Insights": [],
+            "Actionable Steps": [],
+            "Summary": ""
+        }
+        
+        current_section = None
+        for line in response.split('\n'):
+            if "Key Insights" in line:
+                current_section = "Key Insights"
+            elif "Actionable Steps" in line:
+                current_section = "Actionable Steps"
+            elif "Summary" in line:
+                current_section = "Summary"
+            elif current_section:
+                line = line.strip()
+                if not line:
+                    continue
+                if current_section == "Summary":
+                    sections["Summary"] += line + " "
+                elif line.startswith(('-', '*')):
+                    sections[current_section].append(line)
+                elif line[0].isdigit():
+                    sections[current_section].append(line)
+        
+        # Cleanup summary
+        sections["Summary"] = sections["Summary"].strip()
+        return sections
 
-# Load already sent post IDs
 try:
     with open(SENT_POSTS_FILE, "r") as f:
         sent_post_ids = json.load(f)
 except (FileNotFoundError, json.JSONDecodeError):
     sent_post_ids = []
 
-
 def get_random_unseen_post():
-    """Fetch a random post from FrankSonnenbergOnline that hasn't been used before."""
+    """Fetch posts with rate limiting"""
     try:
+        time.sleep(5)  # Basic rate limiting
+        
         response = requests.get(
             "https://www.franksonnenbergonline.com/wp-json/wp/v2/posts",
             params={
@@ -765,225 +845,156 @@ def get_random_unseen_post():
                 "orderby": "date",
                 "order": "desc"
             },
-            timeout=15
+            headers={
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/118.0.0.0 Safari/537.36'
+            },
+            timeout=20
         )
+        
+        if response.status_code == 429:
+            logger.warning("Rate limited - waiting 5 minutes")
+            time.sleep(300)
+            return None
+            
         response.raise_for_status()
         posts = response.json()
-        # Filter out posts already sent
+        
         unseen_posts = [p for p in posts if p['id'] not in sent_post_ids]
-
-        # If all posts have been used, clear the list so they can repeat.
+        
         if not unseen_posts:
+            logger.info("Resetting sent posts list")
             sent_post_ids.clear()
             unseen_posts = posts
-
+            
         selected_post = random.choice(unseen_posts)
         sent_post_ids.append(selected_post['id'])
-        # Keep only the latest MAX_POSTS_TO_FETCH IDs for storage
+        
         with open(SENT_POSTS_FILE, "w") as f:
             json.dump(sent_post_ids[-MAX_POSTS_TO_FETCH:], f)
+            
         return selected_post
+        
     except Exception as e:
         logger.error(f"Error fetching posts: {e}")
         return None
 
-
 def clean_content(content):
-    """Clean HTML content to preserve the main blog article text while removing unwanted sections."""
+    """Improved content cleaning with structure preservation"""
     soup = BeautifulSoup(content, 'html.parser')
     
-    # Remove sections that likely aren’t part of the main article
-    unwanted = ['comment', 'share', 'subscribe', 'related posts', 'leave a reply']
-    for element in soup.find_all():
-        if any(keyword in element.get_text().lower() for keyword in unwanted):
+    # Remove non-content elements
+    for selector in ['div.sharedaddy', 'section.comments', 'div.subscribe-box']:
+        for element in soup.select(selector):
             element.decompose()
     
-    # Extract paragraphs that seem to contain the main article content.
     paragraphs = []
-    for p in soup.find_all('p'):
-        text = p.get_text(strip=True)
-        if len(text) > 40 and not re.search(r'^\W+$', text):
-            paragraphs.append(text)
+    for element in soup.find_all(['p', 'ul', 'ol']):
+        if element.name in ['ul', 'ol']:
+            items = [f"• {li.get_text(strip=True)}" for li in element.find_all('li')]
+            paragraphs.append('\n'.join(items))
+        else:
+            text = element.get_text(strip=True)
+            if len(text) > 50:
+                paragraphs.append(text)
     
     return '\n\n'.join(paragraphs)
 
-
-def format_message(title, motivational_text, action_points):
-    """Format the final message attractively."""
-    # Build message with title, motivational text and bullet action points.
-    message = (
-        f"📚 <b>{html.escape(title)}</b>\n\n"
-        f"{motivational_text}\n\n"
-        "🔑 <b>Key Actions:</b>\n"
-        + "\n".join([f"• {pt.strip().rstrip('.!')}" for pt in action_points])
-        + "\n\n━━━━━━━━━━━━━━━━━━━━━━━━\n"
-        "💡 <i>Remember:</i> Every small step makes a huge difference!\n"
-        "Explore more → @Excellerators"
-    )
-    return message[:4096]  # Truncate if over Telegram's limit
-
-
-def extract_actionable_points(response_text):
-    """
-    Extract actionable points from ChatGPT's response.
-    This simple example splits the response into sentences and picks those starting with imperative verbs.
-    """
-    sentences = re.split(r'(?<=[.!?]) +', response_text)
-    action_points = [
-        s.strip() for s in sentences
-        if re.match(r'^(Try|Focus|Implement|Start|Begin|Consider|Review)', s, re.IGNORECASE)
-        and 20 < len(s) < 120
-    ]
-    # Ensure a fallback if no points are extracted.
-    if not action_points:
-        action_points = [
-            "Focus on your top priorities",
-            "Review your daily progress",
-            "Eliminate one distraction"
-        ]
-    return action_points[:3]
-
-
-def send_to_chatgpt_via_selenium(prompt, driver_path="chromedriver"):
-    """
-    Use Selenium to drive ChatGPT's web interface:
-     - Open ChatGPT, wait for the prompt box.
-     - Send the provided prompt.
-     - Wait for the response and return the text.
-     
-    Note: The details below are illustrative; adjust selectors and waits as needed depending on ChatGPT’s UI updates.
-    """
-    # Initialize webdriver (using Chrome in this example; adjust for your browser)
-    options = webdriver.ChromeOptions()
-    options.add_argument("--headless")  # run in headless mode if desired
-    driver = webdriver.Chrome(executable_path=driver_path, options=options)
+def process_with_chatgpt(text, bot: Client):
+    """Process content through ChatGPT"""
     try:
-        driver.get(CHATGPT_URL)
-        # Wait until ChatGPT's input area is present (update the selector as needed)
-        input_box = WebDriverWait(driver, 60).until(
-            EC.presence_of_element_located((By.TAG_NAME, "textarea"))
+        processor = ChatGPTProcessor()
+        processed = processor.process_content(text)
+        
+        asyncio.create_task(
+            bot.send_message(
+                LOG_CHANNEL,
+                f"📝 ChatGPT Response:\n<code>{html.escape(str(processed))}</code>",
+                parse_mode=enums.ParseMode.HTML
+            )
         )
-        time.sleep(2)  # Small wait to ensure stability
-
-        # Enter the prompt (clear first if necessary)
-        input_box.clear()
-        input_box.send_keys(prompt)
-        input_box.send_keys(u'\ue007')  # press Enter (key code for RETURN)
-
-        # Wait for a response element to appear (selector will depend on ChatGPT's layout)
-        response_area = WebDriverWait(driver, 120).until(
-            EC.presence_of_element_located((By.XPATH, "//div[@class='result-streaming']"))
-        )
-
-        # Allow time for the full response to load
-        time.sleep(5)
-        response_text = response_area.text
-
-        # Ensure the response is trimmed to our required length if needed (1200 to 1400 chars)
-        if len(response_text) < 1200:
-            logger.warning("Received response shorter than desired minimum length.")
-        elif len(response_text) > 1400:
-            response_text = response_text[:1400]
-
-        return response_text
+        
+        return processed
+        
     except Exception as e:
-        logger.error(f"Error in ChatGPT Selenium interaction: {e}")
-        return ""
-    finally:
-        driver.quit()
+        logger.error(f"ChatGPT processing failed: {str(e)}")
+        return None
 
+def build_structured_message(title, content):
+    """Format message with ChatGPT response"""
+    if not content:
+        return "🌟 <b>Daily Insight Update</b> 🌟\n\nNew content coming soon!\n\nStay tuned → @Excellerators"
+    
+    return (
+        f"📘 <b>{html.escape(title)}</b>\n\n"
+        "🔍 <b>Key Insights:</b>\n"
+        f"{chr(10).join(content.get('Key Insights', ['No key insights generated']))}\n\n"
+        "🚀 <b>Actionable Steps:</b>\n"
+        f"{chr(10).join(content.get('Actionable Steps', ['No steps generated']))}\n\n"
+        "📌 <b>Summary:</b>\n"
+        f"{content.get('Summary', 'No summary available')}\n\n"
+        "━━━━━━━━━━━━━━━━━━━━━━━━\n"
+        "💡 Powered by ChatGPT | Join @Excellerators"
+    )[:4096]
 
-def fetch_and_send_article_via_chatgpt(bot: "Client"):
-    """
-    Complete workflow:
-      1. Fetch a unique article from FrankSonnenbergOnline.
-      2. Clean the content preserving the main article text.
-      3. Compose a prompt instructing ChatGPT (via web interface automation) to generate a motivational/inspirational response
-         (approx. 1200-1400 characters) and list actionable points based on the article.
-      4. Extract the response and actionable points.
-      5. Format the final message and send it to the quotes channel.
-    """
+def fetch_daily_article(bot: Client):
     try:
         post = get_random_unseen_post()
         if not post:
             raise Exception("No new posts available")
+            
         raw_content = post['content']['rendered']
-        cleaned_content = clean_content(raw_content)
-        title = html.escape(post['title']['rendered'])
-
-        # Build a prompt for ChatGPT.
-        prompt = (
-            "You are an expert motivational coach. "
-            "Using the following article content, provide a motivational and inspirational response between 1200 to 1400 characters. "
-            "Also, list 3 actionable points based on the article. "
-            "Here is the article content:\n\n"
-            f"{cleaned_content}"
-        )
-
-        # Log cleaned content (if needed) before sending to ChatGPT
+        cleaned = clean_content(raw_content)
+        
         asyncio.create_task(
             bot.send_message(
-                chat_id=LOG_CHANNEL,
-                text=f"🧹 <b>Cleaned Content for ChatGPT:</b>\n<pre>{html.escape(cleaned_content[:3000])}</pre>",
-                parse_mode="HTML"
+                LOG_CHANNEL,
+                f"🧹 Cleaned Content:\n<code>{html.escape(cleaned[:500])}</code>",
+                parse_mode=enums.ParseMode.HTML
             )
         )
+        
+        processed = process_with_chatgpt(cleaned, bot)
+        return build_structured_message(post['title']['rendered'], processed)
+        
+    except Exception as e:
+        logger.error(f"Processing error: {e}")
+        return (
+            "🌟 <b>Daily Insight Update</b> 🌟\n\n"
+            "Content processing failed. New insights coming soon!\n\n"
+            "Stay tuned → @Excellerators"
+        )
 
-        # Use Selenium to interact with ChatGPT
-        chatgpt_response = send_to_chatgpt_via_selenium(prompt)
-        if not chatgpt_response:
-            raise Exception("Failed to obtain response from ChatGPT.")
+async def send_daily_article(bot: Client):
+    while True:
+        try:
+            tz = timezone('Asia/Kolkata')
+            now = datetime.now(tz)
+            target_time = now.replace(hour=17, minute=39, second=0)
+            
+            if now >= target_time:
+                target_time += timedelta(days=1)
+                
+            sleep_seconds = (target_time - now).total_seconds()
+            logger.info(f"Next post in {sleep_seconds/3600:.1f} hours")
+            await asyncio.sleep(sleep_seconds)
 
-        # For demonstration, we assume ChatGPT's output has a section with actionable points
-        # You might need to adjust this extraction logic based on the actual response format.
-        # As a fallback, we also use our extraction function.
-        action_points = extract_actionable_points(chatgpt_response)
-
-        # Format the final message
-        final_message = format_message(title, chatgpt_response, action_points)
-
-        # Send the message to the quotes channel.
-        asyncio.create_task(
-            bot.send_message(
-                chat_id=QUOTE_CHANNEL,
-                text=final_message,
-                parse_mode="HTML",
+            message = await asyncio.to_thread(fetch_daily_article, bot)
+            
+            await bot.send_message(
+                QUOTE_CHANNEL,
+                message,
+                parse_mode=enums.ParseMode.HTML,
                 disable_web_page_preview=True
             )
-        )
-
-        asyncio.create_task(
-            bot.send_message(
-                chat_id=LOG_CHANNEL,
-                text="✅ Successfully sent article via ChatGPT reply."
+            await bot.send_message(LOG_CHANNEL, "✅ Post published successfully")
+            
+        except Exception as e:
+            logger.error(f"Send error: {str(e)[:200]}")
+            await bot.send_message(
+                LOG_CHANNEL,
+                f"⚠️ Error: {str(e)[:200]}"
             )
-        )
+            await asyncio.sleep(3600)  # Wait 1 hour on errors
 
-    except Exception as e:
-        logger.error(f"Error in fetch_and_send_article_via_chatgpt: {e}")
-        asyncio.create_task(
-            bot.send_message(
-                chat_id=LOG_CHANNEL,
-                text=f"❌ Failed to process article: {str(e)[:200]}"
-            )
-        )
-
-
-# Optionally, schedule this new workflow without interfering with existing bot schedules:
-async def schedule_daily_articles(bot: "Client"):
-    while True:
-        # Example: set your target time (here: 11 PM IST)
-        tz = timezone('Asia/Kolkata')
-        now = datetime.now(tz)
-        target_time = now.replace(hour=16, minute=56, second=0, microsecond=0)
-        if now >= target_time:
-            target_time += timedelta(days=1)
-        sleep_seconds = (target_time - now).total_seconds()
-        logger.info(f"[ChatGPT Workflow] Sleeping for {sleep_seconds:.1f} seconds until scheduled time")
-        await asyncio.sleep(sleep_seconds)
-
-        logger.info("[ChatGPT Workflow] Processing daily article via ChatGPT...")
-        fetch_and_send_article_via_chatgpt(bot)
-
-        # Sleep one day (or adjust as needed)
-        await asyncio.sleep(86400)
+def schedule_daily_articles(client: Client):
+    asyncio.create_task(send_daily_article(client))
