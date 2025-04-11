@@ -979,7 +979,7 @@ async def send_daily_article(bot: Client):
         await asyncio.sleep(86400)  # 24 hours
         
 
-@Client.on_message(filters.command('article'))
+@Client.on_message(filters.command('article') & filters.user(ADMINS))
 async def instant_article_handler(client, message: Message):
     """Handle immediate article requests via command"""
     try:
