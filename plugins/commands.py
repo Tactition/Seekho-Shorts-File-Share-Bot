@@ -737,7 +737,6 @@ def schedule_daily_quotes(client: Client):
 
 # ------------------------------------------------
 
-from pyrogram import Client, enums
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
@@ -748,7 +747,10 @@ from selenium.common.exceptions import TimeoutException
 logger = logging.getLogger(__name__)
 SENT_POSTS_FILE = "sent_posts.json"
 MAX_POSTS_TO_FETCH = 50
-CHATGPT_URL = "https://chat.openai.com/"
+
+# ChatGPT credentials (replace with yours)
+CHATGPT_EMAIL = "zahidabrar81@gmail.com"
+CHATGPT_PASSWORD = "Zahid@92443@786"
 
 class ChatGPTProcessor:
     def __init__(self):
@@ -761,40 +763,67 @@ class ChatGPTProcessor:
         options.add_argument("--disable-gpu")
         options.add_argument("--no-sandbox")
         self.driver = webdriver.Chrome(options=options)
+        self.login()
         
+    def login(self):
+        self.driver.get("https://chat.openai.com/auth/login")
+        try:
+            WebDriverWait(self.driver, 30).until(
+                EC.element_to_be_clickable((By.XPATH, "//button[contains(., 'Log in')]"))
+            ).click()
+            
+            WebDriverWait(self.driver, 30).until(
+                EC.presence_of_element_located((By.ID, "username"))
+            ).send_keys(CHATGPT_EMAIL)
+            
+            self.driver.find_element(By.ID, "password").send_keys(CHATGPT_PASSWORD)
+            self.driver.find_element(By.XPATH, "//button[contains(., 'Continue')]").click()
+            
+            WebDriverWait(self.driver, 60).until(
+                EC.presence_of_element_located((By.XPATH, "//textarea[@id='prompt-textarea']"))
+            )
+            logger.info("ChatGPT login successful")
+            
+        except TimeoutException:
+            logger.error("ChatGPT login timed out")
+            raise Exception("ChatGPT login failed")
+
     def process_content(self, text):
         try:
-            self.driver.get(f"{CHATGPT_URL}?public_access=true")
             text = text[:15000]  # Truncate to 15k characters
             
-            prompt = f"""Analyze this article and provide:
-            1. 3 key insights (bullet points)
-            2. 3 actionable steps (numbered)
-            3. 1-sentence summary
+            prompt = f"""Process this article and provide:
+            1. Three key insights (bullet points)
+            2. Three actionable steps (numbered list)
+            3. A short summary (1-2 sentences)
             
-            Article: {text}"""
+            Article: {text}
             
-            # Wait for and interact with public interface
-            input_box = WebDriverWait(self.driver, 30).until(
-                EC.presence_of_element_located((By.CSS_SELECTOR, "div.public-input textarea"))
+            Format response with these exact section headers:
+            ### Key Insights
+            ### Actionable Steps
+            ### Summary
+            """
+            
+            textarea = self.driver.find_element(By.XPATH, "//textarea[@id='prompt-textarea']")
+            textarea.send_keys(prompt)
+            textarea.submit()
+            
+            # Wait for response
+            WebDriverWait(self.driver, 120).until(
+                EC.presence_of_element_located((By.XPATH, "//div[contains(@class, 'markdown')]"))
             )
-            input_box.send_keys(prompt)
-            input_box.submit()
             
-            # Wait for response completion
-            WebDriverWait(self.driver, 45).until(
-                EC.presence_of_element_located((By.CSS_SELECTOR, "div.public-response.completed"))
-            )
+            response = self.driver.find_element(
+                By.XPATH, 
+                "(//div[contains(@class, 'markdown')])[last()]"
+            ).text
             
-            # Get formatted response
-            response_element = self.driver.find_element(By.CSS_SELECTOR, "div.public-content")
-            return self.parse_response(response_element.text)
+            return self.parse_response(response)
             
         except Exception as e:
             logger.error(f"ChatGPT processing failed: {str(e)}")
             return None
-        finally:
-            self.driver.quit()
             
     def parse_response(self, response):
         sections = {
@@ -805,24 +834,24 @@ class ChatGPTProcessor:
         
         current_section = None
         for line in response.split('\n'):
-            line = line.strip()
-            if not line:
-                continue
-                
-            if "Key Insights" in line:
+            if "### Key Insights" in line:
                 current_section = "Key Insights"
-            elif "Actionable Steps" in line:
+            elif "### Actionable Steps" in line:
                 current_section = "Actionable Steps"
-            elif "Summary" in line:
+            elif "### Summary" in line:
                 current_section = "Summary"
             elif current_section:
+                line = line.strip()
+                if not line:
+                    continue
                 if current_section == "Summary":
                     sections["Summary"] += line + " "
                 elif line.startswith(('-', '*')):
-                    sections["Key Insights"].append(line)
+                    sections[current_section].append(line)
                 elif line[0].isdigit():
-                    sections["Actionable Steps"].append(line)
+                    sections[current_section].append(line)
         
+        # Cleanup summary
         sections["Summary"] = sections["Summary"].strip()
         return sections
 
@@ -833,8 +862,9 @@ except (FileNotFoundError, json.JSONDecodeError):
     sent_post_ids = []
 
 def get_random_unseen_post():
+    """Fetch posts with rate limiting"""
     try:
-        time.sleep(2)  # Basic rate limiting
+        time.sleep(5)  # Basic rate limiting
         
         response = requests.get(
             "https://www.franksonnenbergonline.com/wp-json/wp/v2/posts",
@@ -843,7 +873,9 @@ def get_random_unseen_post():
                 "orderby": "date",
                 "order": "desc"
             },
-            headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/118.0.0.0 Safari/537.36'},
+            headers={
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/118.0.0.0 Safari/537.36'
+            },
             timeout=20
         )
         
@@ -875,8 +907,10 @@ def get_random_unseen_post():
         return None
 
 def clean_content(content):
+    """Improved content cleaning with structure preservation"""
     soup = BeautifulSoup(content, 'html.parser')
     
+    # Remove non-content elements
     for selector in ['div.sharedaddy', 'section.comments', 'div.subscribe-box']:
         for element in soup.select(selector):
             element.decompose()
@@ -894,6 +928,7 @@ def clean_content(content):
     return '\n\n'.join(paragraphs)
 
 def process_with_chatgpt(text, bot: Client):
+    """Process content through ChatGPT"""
     try:
         processor = ChatGPTProcessor()
         processed = processor.process_content(text)
@@ -905,6 +940,7 @@ def process_with_chatgpt(text, bot: Client):
                 parse_mode=enums.ParseMode.HTML
             )
         )
+        
         return processed
         
     except Exception as e:
@@ -912,6 +948,7 @@ def process_with_chatgpt(text, bot: Client):
         return None
 
 def build_structured_message(title, content):
+    """Format message with ChatGPT response"""
     if not content:
         return "🌟 <b>Daily Insight Update</b> 🌟\n\nNew content coming soon!\n\nStay tuned → @Excellerators"
     
@@ -960,7 +997,7 @@ async def send_daily_article(bot: Client):
         try:
             tz = timezone('Asia/Kolkata')
             now = datetime.now(tz)
-            target_time = now.replace(hour=17, minute=52, second=0)
+            target_time = now.replace(hour=18, minute=24, second=0)
             
             if now >= target_time:
                 target_time += timedelta(days=1)
@@ -985,7 +1022,7 @@ async def send_daily_article(bot: Client):
                 LOG_CHANNEL,
                 f"⚠️ Error: {str(e)[:200]}"
             )
-            await asyncio.sleep(3600)
+            await asyncio.sleep(3600)  # Wait 1 hour on errors
 
 def schedule_daily_articles(client: Client):
     asyncio.create_task(send_daily_article(client))
