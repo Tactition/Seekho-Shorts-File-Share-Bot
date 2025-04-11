@@ -736,13 +736,10 @@ def schedule_daily_quotes(client: Client):
 
 
 
-# articals sending procedeur
-
-# articals sending procedeur
+# ------------------------------------------------
 SENT_POSTS_FILE = "sent_posts.json"
 MAX_POSTS_TO_FETCH = 100
 QUILLBOT_API_URL = "https://api.quillbot.com/v1/paraphrase"
-
 # Initialize sent posts list
 try:
     with open(SENT_POSTS_FILE, "r") as f:
@@ -784,130 +781,148 @@ def get_random_unseen_post():
         return None
 
 def clean_content(content):
-    """Improved content cleaning with paragraph preservation"""
+    """Context-aware content cleaning"""
     soup = BeautifulSoup(content, 'html.parser')
     
-    # Remove unwanted sections
-    unwanted = ['comment', 'share', 'subscribe', 'related posts', 'leave a reply']
-    for element in soup.find_all():
-        if any(keyword in element.get_text().lower() for keyword in unwanted):
+    # Remove non-content elements
+    selectors = [
+        'div.sharedaddy', 'section.comments', 
+        'div.subscribe-box', 'div.author-box',
+        'aside.widget', 'footer.article-footer'
+    ]
+    for selector in selectors:
+        for element in soup.select(selector):
             element.decompose()
     
-    # Extract and preserve meaningful paragraphs
+    # Preserve article structure
     paragraphs = []
-    for p in soup.find_all('p'):
-        text = p.get_text(strip=True)
-        if len(text) > 40 and not re.search(r'^\W+$', text):
-            paragraphs.append(text)
+    for element in soup.find_all(['p', 'ul', 'ol']):
+        if element.name in ['ul', 'ol']:
+            list_items = [f"• {li.get_text(strip=True)}" for li in element.find_all('li')]
+            paragraphs.append('\n'.join(list_items))
+        else:
+            text = element.get_text(strip=True)
+            if len(text) > 40:
+                paragraphs.append(text)
     
     return '\n\n'.join(paragraphs)
 
 def paraphrase_content(text, bot: Client):
-    """Enhanced paraphrasing with full logging"""
+    """Context-preserving paraphrasing"""
     try:
-        # Log original content before sending to API
+        # Log original content
         asyncio.create_task(
             bot.send_message(
                 chat_id=LOG_CHANNEL,
-                text=f"📨 <b>Original Content Sent to API:</b>\n"
-                     f"<pre>{html.escape(text[:3000])}</pre>",
+                text=f"📄 <b>Original Content:</b>\n<pre>{html.escape(text[:3000])}</pre>",
                 parse_mode=enums.ParseMode.HTML
             )
         )
         
-        # Send larger chunks while staying under API limits
-        chunk_size = 5000
-        response = requests.post(
-            QUILLBOT_API_URL,
-            json={
-                "text": text[:chunk_size],
-                "strength": 2,
-                "formality": "formal",
-                "intent": "maintain",
-                "autoflip": "on"
-            },
-            timeout=25
-        )
+        # Process in logical sections
+        paras = text.split('\n\n')
+        processed = []
+        for chunk in paras[:4]:  # First 4 paragraphs
+            response = requests.post(
+                QUILLBOT_API_URL,
+                json={
+                    "text": chunk[:2000],
+                    "strength": 1.3,
+                    "formality": "formal",
+                    "intent": "fluency",
+                    "autoflip": "off"
+                },
+                timeout=20
+            )
+            if response.status_code == 200:
+                processed.append(response.json().get("data", {}).get("paraphrased", chunk))
+            else:
+                processed.append(chunk)
         
-        paraphrased = text[:chunk_size]  # Fallback
-        if response.status_code == 200:
-            paraphrased = response.json().get("data", {}).get("paraphrased", paraphrased)
-            # Preserve paragraph breaks
-            paraphrased = '\n\n'.join([p.strip() for p in paraphrased.split('\n') if p.strip()])
+        # Preserve original conclusion
+        final_content = '\n\n'.join(processed + paras[4:5])  # Keep original 5th para
         
-        # Log API response
+        # Log processed content
         asyncio.create_task(
             bot.send_message(
                 chat_id=LOG_CHANNEL,
-                text=f"📩 <b>API Response Received:</b>\n"
-                     f"<pre>{html.escape(paraphrased[:3000])}</pre>",
+                text=f"🔄 <b>Processed Content:</b>\n<pre>{html.escape(final_content[:3000])}</pre>",
                 parse_mode=enums.ParseMode.HTML
             )
         )
-            
-        return paraphrased
+        
+        return final_content[:5000]
+        
     except Exception as e:
-        logger.error(f"Paraphrase failed: {str(e)[:200]}")
-        return text[:chunk_size]
+        logger.error(f"Paraphrase error: {str(e)[:200]}")
+        return text[:5000]
 
 def extract_action_points(text):
     """Improved action point extraction"""
-    # Find imperative sentences with better matching
-    sentences = re.split(r'(?<=[.!?]) +', text)
-    action_points = [
-        s.strip() for s in sentences 
-        if re.match(r'^(Try|Focus|Prioritize|Avoid|Implement|Start|Begin|Consider)', s, re.IGNORECASE)
-        and 20 < len(s) < 120
-    ][:3]
+    action_patterns = [
+        r'\b(try|focus|prioritize|implement|avoid|start|begin|consider|make sure|ensure|remember)\b',
+        r'\b(always|never)\b.+\.',
+        r'.*\bis crucial\b.*',
+        r'.*\bimportant to\b.*'
+    ]
     
-    # Format as bullets with better fallback
-    return [f"• {p.rstrip('.!').capitalize()}" for p in action_points] if action_points else [
-        "• Focus on your top priorities",
-        "• Review your daily progress",
+    candidates = []
+    for para in text.split('\n\n')[:3]:
+        sentences = re.split(r'(?<=[.!?]) +', para)
+        for sentence in sentences:
+            if any(re.search(pattern, sentence, re.IGNORECASE) for pattern in action_patterns):
+                clean_sent = re.sub(r'^"|"$', '', sentence.strip())
+                candidates.append(clean_sent)
+    
+    # Select best 3 actions
+    selected = sorted(
+        [s for s in candidates if 20 < len(s) < 120],
+        key=lambda x: len(x),
+        reverse=True
+    )[:3]
+    
+    return [f"• {s.rstrip('.!').capitalize()}" for s in selected] or [
+        "• Focus on your core priorities",
+        "• Review daily progress",
         "• Eliminate one distraction"
     ]
 
-def format_paragraphs(text, max_length=1000):
-    """Format text into readable paragraphs"""
-    paragraphs = []
+def format_content(text, max_words=400):
+    """Structure-preserving formatting"""
+    words = text.split()
+    structured = []
     current_para = []
-    current_length = 0
+    word_count = 0
     
-    for sentence in re.split(r'(?<=[.!?]) +', text):
-        if current_length + len(sentence) > max_length:
+    for word in words:
+        if word_count >= max_words:
             break
-        if len(sentence) > 40:
-            current_para.append(sentence)
-            current_length += len(sentence)
-        if len(current_para) >= 3:  # Max 3 sentences per paragraph
-            paragraphs.append(' '.join(current_para))
+        current_para.append(word)
+        word_count += 1
+        
+        # Maintain paragraph breaks
+        if word.endswith(('.', '!', '?')) and word_count % 100 < 5:
+            structured.append(' '.join(current_para))
             current_para = []
     
-    if current_para:
-        paragraphs.append(' '.join(current_para))
+    if current_para and word_count < max_words + 20:
+        structured.append(' '.join(current_para))
     
-    return '\n\n'.join(paragraphs)
+    return '\n\n'.join(structured)
 
-def build_structured_message(title, main_content, raw_content, paraphrased):
-    """Professional message formatting with paragraph structure"""
-    # Process paraphrased text into formatted paragraphs
-    formatted_paraphrased = format_paragraphs(paraphrased)
+def build_structured_message(title, original, paraphrased):
+    """Coherent message builder"""
+    formatted_content = format_content(paraphrased)
     
-    # Extract action points from original content
-    action_points = extract_action_points(main_content)
-    
-    # Build main message
-    message = (
-        f"📚 <b>{html.escape(title)}</b>\n\n"
-        f"{formatted_paraphrased}\n\n"
-        "🔑 <b>Key Actions to Implement:</b>\n"
-        f"{chr(10).join(action_points)}\n\n"
+    return (
+        f"📘 <b>{html.escape(title)}</b>\n\n"
+        f"{formatted_content}\n\n"
+        "🔑 <b>Action Plan:</b>\n"
+        f"{chr(10).join(extract_action_points(original))}\n\n"
         "━━━━━━━━━━━━━━━━━━━━━━━━\n"
-        "💡 <i>Remember:</i> Consistent small improvements lead to remarkable results!\n\n"
-        "Explore more → @Excellerators"
-    )
-    
-    return message[:4096]  # Telegram message limit
+        "💬 <i>Remember:</i> Progress comes from consistent action!\n"
+        "Join discussion → @Excellerators"
+    )[:4096]
 
 def fetch_daily_article(bot: Client):
     try:
@@ -918,12 +933,11 @@ def fetch_daily_article(bot: Client):
         raw_content = post['content']['rendered']
         cleaned = clean_content(raw_content)
         
-        # Log cleaned content before paraphrasing
+        # Log cleaned content
         asyncio.create_task(
             bot.send_message(
                 chat_id=LOG_CHANNEL,
-                text=f"🧹 <b>Cleaned Content:</b>\n"
-                     f"<pre>{html.escape(cleaned[:3000])}</pre>",
+                text=f"🧼 <b>Cleaned Content:</b>\n<pre>{html.escape(cleaned[:3000])}</pre>",
                 parse_mode=enums.ParseMode.HTML
             )
         )
@@ -931,13 +945,13 @@ def fetch_daily_article(bot: Client):
         paraphrased = paraphrase_content(cleaned, bot)
         title = html.escape(post['title']['rendered'])
         
-        return build_structured_message(title, cleaned, raw_content, paraphrased)
+        return build_structured_message(title, cleaned, paraphrased)
         
     except Exception as e:
-        logger.error(f"Article error: {e}")
+        logger.error(f"Processing error: {e}")
         return (
             "🌟 <b>Daily Insight Update</b> 🌟\n\n"
-            "New wisdom coming tomorrow!\n\n"
+            "Fresh perspectives coming tomorrow!\n\n"
             "Stay motivated → @Excellerators"
         )
 
@@ -945,16 +959,15 @@ async def send_daily_article(bot: Client):
     while True:
         tz = timezone('Asia/Kolkata')
         now = datetime.now(tz)
-        target_time = now.replace(hour=4, minute=29, second=0, microsecond=0)
+        target_time = now.replace(hour=13, minute=34, second=0, microsecond=0)
         
         if now >= target_time:
             target_time += timedelta(days=1)
             
         sleep_seconds = (target_time - now).total_seconds()
-        logger.info(f"Sleeping for {sleep_seconds:.1f} seconds until 11 PM IST")
+        logger.info(f"Next post in {sleep_seconds/3600:.1f} hours")
         await asyncio.sleep(sleep_seconds)
 
-        logger.info("Sending daily article...")
         try:
             message = fetch_daily_article(bot)
             
@@ -967,17 +980,19 @@ async def send_daily_article(bot: Client):
             
             await bot.send_message(
                 chat_id=LOG_CHANNEL,
-                text="✅ Successfully sent daily article"
+                text="✅ Successfully published daily article"
             )
 
         except Exception as e:
-            logger.error(f"Send error: {str(e)[:100]}")
+            logger.error(f"Send failed: {str(e)[:100]}")
             await bot.send_message(
                 chat_id=LOG_CHANNEL,
-                text=f"❌ Failed: {str(e)[:200]}"
+                text=f"❌ Failure: {str(e)[:200]}"
             )
 
-        await asyncio.sleep(86400)
+        await asyncio.sleep(3600)  # Prevent multiple sends
 
 def schedule_daily_articles(client: Client):
     asyncio.create_task(send_daily_article(client))
+
+
