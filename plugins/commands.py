@@ -846,7 +846,9 @@ def paraphrase_content(text, bot: Client):
                     {
                         "role": "system",
                         "content": (
-                            "Rewrite this article concisely and persuasively Keep the overall output between 1400 to 1800 characters"
+                            "Rewrite this article in a motivational, inpirational and persuasive manner and the overall output must be between 1400 to 1800 characters"
+                            "Incorporate one quote or little paraphrased idea from renowned figures such as Albert Einstein, Friedrich Nietzsche, Ralph Waldo Emerson, Socrates, Plato, Aristotle, Kant, Descartes, Locke, Rousseau, Marx, de Beauvoir to Support the article based on the context"
+                            "Encourage self-analysis and leveraging inherent strengths. "
                             "Format your response so that the first line starts with 'Title:' followed by your generated title, Also the generated title should be unique, attractive, hooky title for the article. then an empty line, and then the article text in multiple paragraphs. "
                         )
                     },
@@ -931,7 +933,7 @@ async def send_daily_article(bot: Client):
     while True:
         try:
             now = datetime.now(tz)
-            target_time = now.replace(hour=3, minute=32, second=20, microsecond=0)
+            target_time = now.replace(hour=3, minute=49, second=20, microsecond=0)
             
             if now >= target_time:
                 target_time += timedelta(days=1)
