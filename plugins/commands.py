@@ -754,8 +754,6 @@ logger = logging.getLogger(__name__)
 SENT_POSTS_FILE = "sent_posts.json"
 MAX_POSTS_TO_FETCH = 10
 QUILLBOT_API_URL = "https://api.quillbot.com/v1/paraphrase"
-QUOTE_CHANNEL = -1001234567890
-LOG_CHANNEL = -1000987654321
 
 class RequestTracker:
     cache_posts = []
