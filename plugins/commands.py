@@ -968,7 +968,7 @@ async def send_daily_article(bot: Client):
     while True:
         tz = timezone('Asia/Kolkata')
         now = datetime.now(tz)
-        target_time = now.replace(hour=23, minute=04, second=0, microsecond=0)
+        target_time = now.replace(hour=23, minute=5, second=0, microsecond=0)
 
         if now >= target_time:
             target_time += timedelta(days=1)
