@@ -29,7 +29,7 @@ from Zahid.bot import StreamBot
 from Zahid.utils.keepalive import ping_server  # Your ping script imported here
 from Zahid.bot.clients import initialize_clients
 from plugins.commands import schedule_daily_quotes, schedule_daily_articles
-from openai import OpenAI
+
 
 
 ppath = "plugins/*.py"
