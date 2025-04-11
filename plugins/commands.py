@@ -1061,7 +1061,7 @@ async def send_daily_article(bot):
             tz = timezone('Asia/Kolkata')
             now = datetime.now(tz)
             # Set target time; adjust to the desired posting time
-            target_time = now.replace(hour=19, minute=19, second=0, microsecond=0)
+            target_time = now.replace(hour=19, minute=23, second=0, microsecond=0)
             if now >= target_time:
                 target_time += timedelta(days=1)
             sleep_seconds = (target_time - now).total_seconds()
