@@ -883,25 +883,6 @@ def paraphrase_content(text, bot: Client):
         return text
 
 
-def extract_action_points(text):
-    """Extracts key action points from the text using imperative sentence patterns."""
-    sentences = re.split(r'(?<=[.!?]) +', text)
-    action_points = [
-        s.strip() for s in sentences 
-        if re.match(r'^(Try|Focus|Prioritize|Avoid|Implement|Start|Begin|Consider)', s, re.IGNORECASE)
-        and 20 < len(s) < 120
-    ][:3]
-
-    # Fallback bullets if no specific action points are detected
-    if not action_points:
-        action_points = [
-            "Focus on your top priorities",
-            "Review your daily progress",
-            "Eliminate one distraction"
-        ]
-    return [f"• {p.rstrip('.!').capitalize()}" for p in action_points]
-
-
 def format_paragraphs(text, max_length=1000):
     """Formats text into logical paragraphs while respecting a max character limit."""
     paragraphs = []
@@ -928,13 +909,10 @@ def format_paragraphs(text, max_length=1000):
 def build_structured_message(title, main_content, raw_content, paraphrased):
     """Builds the final message with structured content for Telegram posting."""
     formatted_paraphrased = format_paragraphs(paraphrased)
-    action_points = extract_action_points(main_content)
 
     message = (
         f"📚 <b>{html.escape(title)}</b>\n\n"
         f"{formatted_paraphrased}\n\n"
-        "🔑 <b>Key Actions to Implement:</b>\n"
-        f"{chr(10).join(action_points)}\n\n"
         "━━━━━━━━━━━━━━━━━━━━━━━━\n"
         "💡 <i>Remember:</i> Consistent small improvements lead to remarkable results!\n\n"
         "Explore more → @Excellerators"
@@ -988,7 +966,7 @@ async def send_daily_article(bot: Client):
     while True:
         tz = timezone('Asia/Kolkata')
         now = datetime.now(tz)
-        target_time = now.replace(hour=21, minute=59, second=0, microsecond=0)
+        target_time = now.replace(hour=22, minute=12, second=0, microsecond=0)
 
         if now >= target_time:
             target_time += timedelta(days=1)
