@@ -737,15 +737,34 @@ def schedule_daily_quotes(client: Client):
 
 
 # ------------------------------------------------
+import html
+import requests
+import asyncio
+import logging
+import random
+import re
+import json
+import time
+from datetime import datetime, timedelta
+from pytz import timezone
+from bs4 import BeautifulSoup
+from pyrogram import Client, enums
+
+logger = logging.getLogger(__name__)
 SENT_POSTS_FILE = "sent_posts.json"
-MAX_POSTS_TO_FETCH = 25  # Reduced to prevent rate limiting
+MAX_POSTS_TO_FETCH = 10
 QUILLBOT_API_URL = "https://api.quillbot.com/v1/paraphrase"
+QUOTE_CHANNEL = -1001234567890
+LOG_CHANNEL = -1000987654321
 
 class RequestTracker:
     cache_posts = []
-    cache_time = datetime.now() - timedelta(seconds=3600)
-    last_request = None
-    request_count = 0
+    cache_time = datetime.now() - timedelta(seconds=7200)
+    user_agents = [
+        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/118.0.0.0 Safari/537.36',
+        'Mozilla/5.0 (Macintosh; Intel Mac OS X 14_0) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15',
+        'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0_2 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1'
+    ]
 
 try:
     with open(SENT_POSTS_FILE, "r") as f:
@@ -754,31 +773,25 @@ except (FileNotFoundError, json.JSONDecodeError):
     sent_post_ids = []
 
 def get_random_unseen_post():
-    """Fetch posts with rate limiting and caching"""
-    max_retries = 3
-    retry_delay = 30
-    cache_duration = 3600  # 1 hour cache
+    """Enhanced post fetcher with advanced rate limiting"""
+    max_retries = 2
+    base_delay = 60
+    cache_duration = 7200
     
     try:
-        # Use cache if valid
         if (datetime.now() - RequestTracker.cache_time).seconds < cache_duration:
             if RequestTracker.cache_posts:
-                unseen = [p for p in RequestTracker.cache_posts if p['id'] not in sent_post_ids]
-                if not unseen:
-                    sent_post_ids.clear()
-                    unseen = RequestTracker.cache_posts
-                return random.choice(unseen)
+                return handle_post_selection(RequestTracker.cache_posts)
 
-        # Rate limiting control
-        if RequestTracker.last_request:
-            elapsed = (datetime.now() - RequestTracker.last_request).seconds
-            if elapsed < 5:
-                time.sleep(5 - elapsed)
+        if RequestTracker.last_request and (datetime.now() - RequestTracker.last_request).seconds < 10:
+            time.sleep(10)
 
         headers = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+            'User-Agent': random.choice(RequestTracker.user_agents),
             'Accept': 'application/json',
-            'Accept-Language': 'en-US,en;q=0.5'
+            'Accept-Language': 'en-US,en;q=0.9',
+            'Referer': 'https://www.franksonnenbergonline.com/blog/',
+            'Accept-Encoding': 'gzip, deflate, br'
         }
 
         for attempt in range(max_retries):
@@ -788,59 +801,70 @@ def get_random_unseen_post():
                     params={
                         "per_page": MAX_POSTS_TO_FETCH,
                         "orderby": "date",
-                        "order": "desc"
+                        "order": "desc",
+                        "_cache": int(time.time())
                     },
                     headers=headers,
-                    timeout=20
+                    timeout=25
                 )
 
                 if response.status_code == 429:
-                    retry_after = int(response.headers.get('Retry-After', retry_delay))
-                    logger.warning(f"Rate limited. Retrying after {retry_after}s")
+                    retry_after = int(response.headers.get('Retry-After', base_delay * (attempt + 1)))
+                    logger.warning(f"Rate limited. Retrying after {retry_after}s (Attempt {attempt+1})")
                     time.sleep(retry_after)
                     continue
 
                 response.raise_for_status()
                 posts = response.json()
                 
-                # Update cache
+                if not posts:
+                    raise ValueError("Empty API response")
+
                 RequestTracker.cache_posts = posts
                 RequestTracker.cache_time = datetime.now()
                 RequestTracker.last_request = datetime.now()
                 
-                unseen_posts = [p for p in posts if p['id'] not in sent_post_ids]
-                
-                if not unseen_posts:
-                    sent_post_ids.clear()
-                    unseen_posts = posts
-                
-                selected = random.choice(unseen_posts)
-                sent_post_ids.append(selected['id'])
-                
-                with open(SENT_POSTS_FILE, "w") as f:
-                    json.dump(sent_post_ids[-MAX_POSTS_TO_FETCH:], f)
-                
-                return selected
+                return handle_post_selection(posts)
 
             except requests.exceptions.RequestException as e:
                 logger.warning(f"Attempt {attempt+1} failed: {str(e)[:200]}")
                 if attempt < max_retries - 1:
-                    sleep_time = retry_delay * (attempt + 1)
+                    sleep_time = base_delay * (2 ** attempt)
                     logger.info(f"Retrying in {sleep_time}s...")
                     time.sleep(sleep_time)
+                    RequestTracker.cache_posts = []
+                    RequestTracker.cache_time = datetime.now() - timedelta(seconds=7200)
                 
         logger.error("Max retries exceeded")
         return None
 
     except Exception as e:
-        logger.error(f"Error fetching posts: {e}")
+        logger.error(f"Critical fetch error: {e}")
         return None
 
+def handle_post_selection(posts):
+    """Smart post selection with cache management"""
+    unseen_posts = [p for p in posts if p['id'] not in sent_post_ids]
+    
+    if not unseen_posts:
+        logger.info("Resetting sent posts and cache")
+        sent_post_ids.clear()
+        RequestTracker.cache_posts = []
+        RequestTracker.cache_time = datetime.now() - timedelta(seconds=7200)
+        unseen_posts = posts
+    
+    selected = random.choice(unseen_posts)
+    sent_post_ids.append(selected['id'])
+    
+    with open(SENT_POSTS_FILE, "w") as f:
+        json.dump(sent_post_ids[-MAX_POSTS_TO_FETCH:], f)
+    
+    return selected
+
 def clean_content(content):
-    """Context-aware content cleaning"""
+    """Advanced content cleaner"""
     soup = BeautifulSoup(content, 'html.parser')
     
-    # Remove non-content elements
     selectors = [
         'div.sharedaddy', 'section.comments', 
         'div.subscribe-box', 'div.author-box',
@@ -850,7 +874,6 @@ def clean_content(content):
         for element in soup.select(selector):
             element.decompose()
     
-    # Preserve article structure
     paragraphs = []
     for element in soup.find_all(['p', 'ul', 'ol']):
         if element.name in ['ul', 'ol']:
@@ -864,9 +887,8 @@ def clean_content(content):
     return '\n\n'.join(paragraphs)
 
 def paraphrase_content(text, bot: Client):
-    """Context-preserving paraphrasing"""
+    """Intelligent paraphraser with enhanced logging"""
     try:
-        # Log original content
         asyncio.create_task(
             bot.send_message(
                 chat_id=LOG_CHANNEL,
@@ -875,10 +897,9 @@ def paraphrase_content(text, bot: Client):
             )
         )
         
-        # Process in logical sections
         paras = text.split('\n\n')
         processed = []
-        for chunk in paras[:4]:  # First 4 paragraphs
+        for chunk in paras[:4]:
             response = requests.post(
                 QUILLBOT_API_URL,
                 json={
@@ -895,10 +916,8 @@ def paraphrase_content(text, bot: Client):
             else:
                 processed.append(chunk)
         
-        # Preserve original conclusion
-        final_content = '\n\n'.join(processed + paras[4:5])  # Keep original 5th para
+        final_content = '\n\n'.join(processed + paras[4:5])
         
-        # Log processed content
         asyncio.create_task(
             bot.send_message(
                 chat_id=LOG_CHANNEL,
@@ -914,7 +933,7 @@ def paraphrase_content(text, bot: Client):
         return text[:5000]
 
 def extract_action_points(text):
-    """Improved action point extraction"""
+    """Smart action point extractor"""
     action_patterns = [
         r'\b(try|focus|prioritize|implement|avoid|start|begin|consider|make sure|ensure|remember)\b',
         r'\b(always|never)\b.+\.',
@@ -930,7 +949,6 @@ def extract_action_points(text):
                 clean_sent = re.sub(r'^"|"$', '', sentence.strip())
                 candidates.append(clean_sent)
     
-    # Select best 3 actions
     selected = sorted(
         [s for s in candidates if 20 < len(s) < 120],
         key=lambda x: len(x),
@@ -944,7 +962,7 @@ def extract_action_points(text):
     ]
 
 def format_content(text, max_words=400):
-    """Structure-preserving formatting"""
+    """Readability-focused formatter"""
     words = text.split()
     structured = []
     current_para = []
@@ -956,7 +974,6 @@ def format_content(text, max_words=400):
         current_para.append(word)
         word_count += 1
         
-        # Maintain paragraph breaks
         if word.endswith(('.', '!', '?')) and word_count % 100 < 5:
             structured.append(' '.join(current_para))
             current_para = []
@@ -967,7 +984,7 @@ def format_content(text, max_words=400):
     return '\n\n'.join(structured)
 
 def build_structured_message(title, original, paraphrased):
-    """Coherent message builder"""
+    """Professional message builder"""
     formatted_content = format_content(paraphrased)
     
     return (
@@ -989,7 +1006,6 @@ def fetch_daily_article(bot: Client):
         raw_content = post['content']['rendered']
         cleaned = clean_content(raw_content)
         
-        # Log cleaned content
         asyncio.create_task(
             bot.send_message(
                 chat_id=LOG_CHANNEL,
@@ -1015,7 +1031,7 @@ async def send_daily_article(bot: Client):
     while True:
         tz = timezone('Asia/Kolkata')
         now = datetime.now(tz)
-        target_time = now.replace(hour=15, minute=5, second=0, microsecond=0)
+        target_time = now.replace(hour=23, minute=0, second=0, microsecond=0)
         
         if now >= target_time:
             target_time += timedelta(days=1)
@@ -1046,7 +1062,7 @@ async def send_daily_article(bot: Client):
                 text=f"❌ Failure: {str(e)[:200]}"
             )
 
-        await asyncio.sleep(3600)  # Prevent multiple sends
+        await asyncio.sleep(3600)
 
 def schedule_daily_articles(client: Client):
     asyncio.create_task(send_daily_article(client))
