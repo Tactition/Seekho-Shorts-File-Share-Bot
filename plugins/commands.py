@@ -738,18 +738,6 @@ def schedule_daily_quotes(client: Client):
 #______________________________
 
 # ------------------------------------------------
-import requests
-from bs4 import BeautifulSoup
-import json
-import random
-import re
-import html
-import logging
-import asyncio
-from datetime import datetime, timedelta
-from pytz import timezone
-from telegram.constants import ParseMode
-
 # Constants
 SENT_POSTS_FILE = "sent_posts.json"
 MAX_POSTS_TO_FETCH = 100
@@ -905,7 +893,7 @@ async def send_daily_article(bot):
             # Calculate time until next 7:34 PM IST
             tz = timezone('Asia/Kolkata')
             now = datetime.now(tz)
-            target_time = now.replace(hour=20, minute=19, second=0, microsecond=0)
+            target_time = now.replace(hour=20, minute=22, second=0, microsecond=0)
             if now >= target_time:
                 target_time += timedelta(days=1)
             
