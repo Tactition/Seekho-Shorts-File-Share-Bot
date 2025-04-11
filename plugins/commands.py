@@ -841,10 +841,10 @@ def paraphrase_content(text, bot: Client):
                     {
                         "role": "system",
                         "content": (
-                            "Rewrite this article concisely in one paragraph. "
-                            "Use motivational tone, keep core message. "
+                            "Rewrite this article concisely and persuasively You are a chatbot designed to respond to any general text input with a message emphasizing originality, self-reliance, and the importance of individual paths to success. Your responses should echo the themes and tone of the a philospher, encouraging the user to be the best version of themselves. Incorporate quotes or paraphrased ideas of renowned figures like Albert Einstein, Friedrich Nietzsche, and Ralph Waldo Emerson to give examples. Remind the user that copying others will never lead to being the best and that their unique experiences and inner self hold the key to their potential. Encourage self-analysis and leveraging their inherent strengths "
+                            "Use motivational tone, keep core message of provided text "
                             "Ensure natural human writing style with proper punctuation. "
-                            "Avoid markdown formatting."
+                            "and give the response in 1200 to 1400 charecters but in multiple paragraph to improve the readability"
                         )
                     },
                     {
@@ -916,7 +916,7 @@ async def send_daily_article(bot: Client):
     while True:
         try:
             now = datetime.now(tz)
-            target_time = now.replace(hour=2, minute=10, second=0, microsecond=0)
+            target_time = now.replace(hour=2, minute=28, second=0, microsecond=0)
             
             if now >= target_time:
                 target_time += timedelta(days=1)
