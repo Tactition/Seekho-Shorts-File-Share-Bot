@@ -737,12 +737,14 @@ def schedule_daily_quotes(client: Client):
 
 
 #______________________________
-
 # Configure logger (if not already defined globally)
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
 
 SENT_POSTS_FILE = "sent_posts.json"
 MAX_POSTS_TO_FETCH = 100
-QUILLBOT_API_URL = "https://api.quillbot.com/v1/paraphrase"
+DEEPSEEK_API_URL = "https://api.deepseek.com/v1/chat/completions"
+DEEPSEEK_API_KEY = os.getenv("sk-a0c943871b3a4a928a4d114ef199fa06")  # Add this to your environment variables
 
 # Initialize sent posts list
 try:
@@ -824,78 +826,66 @@ def clean_content(content):
 
 def paraphrase_content(text, bot: Client):
     """
-    Sends the full sanitized text to the paraphrasing API in chunks.
-    Prepend an instruction prompt so that the API returns a concise,
-    motivational, inspirational, and engaging version of the article.
-    The output should aim to be about 1400 words.
+    Sends the full sanitized text to DeepSeek API for paraphrasing
     """
     try:
         # Log the original content (limit length for logs)
         asyncio.create_task(
             bot.send_message(
                 chat_id=LOG_CHANNEL,
-                text=f"📨 <b>Original Content Sent to API:</b>\n<pre>{html.escape(text[:3000])}</pre>",
+                text=f"📨 <b>Original Content Sent to DeepSeek:</b>\n<pre>{html.escape(text[:3000])}</pre>",
                 parse_mode=enums.ParseMode.HTML
             )
         )
 
-        # Define the maximum chunk size (leave room for the instruction prompt)
-        chunk_size = 5000
-        instruction_prompt = (
-            "Rewrite the following article in a concise, to-the-point manner. "
-            "Make the response motivational, inspirational, and engaging. "
-            "Preserve natural paragraph structure without breaking paragraphs arbitrarily. "
-            "Ensure the final output is about 1400 words in total. "
-            "Do not simply echo the original content; transform it meaningfully.\n\n"
+        instruction = (
+            "Rewrite this article in a concise, to-the-point manner. Make it motivational, "
+            "inspirational and engaging. Ensure the final "
+            "output is about 1400 words. Transform it meaningfully while keeping the core message."
         )
 
-        chunks = []
-        # Process the full text in chunks if needed
-        for i in range(0, len(text), chunk_size):
-            chunk = text[i:i + chunk_size]
-            prompt_text = instruction_prompt + chunk
-            try:
-                response = requests.post(
-                    QUILLBOT_API_URL,
-                    json={
-                        "text": prompt_text,
-                        "strength": 2,
-                        "formality": "formal",
-                        "intent": "maintain",
-                        "autoflip": "on"
-                    },
-                    timeout=25
-                )
-                if response.status_code == 200:
-                    paraphrased_chunk = response.json().get("data", {}).get("paraphrased", prompt_text)
-                else:
-                    logger.error(f"Paraphrasing API error {response.status_code}: {response.text}")
-                    paraphrased_chunk = prompt_text
-            except Exception as api_e:
-                logger.error(f"Paraphrase API call failed for chunk starting at {i}: {api_e}")
-                paraphrased_chunk = prompt_text
+        headers = {
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {DEEPSEEK_API_KEY}"
+        }
 
-            # Remove the instruction text from the result if present
-            if paraphrased_chunk.startswith(instruction_prompt):
-                paraphrased_chunk = paraphrased_chunk[len(instruction_prompt):].strip()
-            # No reflowing here—the API is expected to preserve the paragraph breaks.
-            chunks.append(paraphrased_chunk)
+        payload = {
+            "model": "deepseek-chat",
+            "messages": [
+                {"role": "system", "content": "You are a professional editor skilled at creating motivational content."},
+                {"role": "user", "content": f"{instruction}\n\n{text}"}
+            ],
+            "temperature": 0.7,
+            "max_tokens": 2000,
+            "top_p": 1.0
+        }
 
-        full_paraphrased = "\n\n".join(chunks)
+        response = requests.post(
+            DEEPSEEK_API_URL,
+            headers=headers,
+            json=payload,
+            timeout=30
+        )
 
-        # Log the paraphrased content (limit logged text)
+        if response.status_code == 200:
+            paraphrased = response.json()['choices'][0]['message']['content']
+        else:
+            logger.error(f"DeepSeek API error {response.status_code}: {response.text}")
+            paraphrased = text  # Fallback to original text
+
+        # Log the paraphrased content
         asyncio.create_task(
             bot.send_message(
                 chat_id=LOG_CHANNEL,
-                text=f"📩 <b>API Response Received:</b>\n<pre>{html.escape(full_paraphrased[:3000])}</pre>",
+                text=f"📩 <b>DeepSeek Response:</b>\n<pre>{html.escape(paraphrased[:3000])}</pre>",
                 parse_mode=enums.ParseMode.HTML
             )
         )
-        return full_paraphrased
+
+        return paraphrased
 
     except Exception as e:
-        logger.error(f"Paraphrase failed: {str(e)[:200]}")
-        # If an error occurs, return the sanitized text as a fallback.
+        logger.error(f"DeepSeek paraphrase failed: {str(e)[:200]}")
         return text
 
 
@@ -968,7 +958,7 @@ async def send_daily_article(bot: Client):
     while True:
         tz = timezone('Asia/Kolkata')
         now = datetime.now(tz)
-        target_time = now.replace(hour=23, minute=5, second=0, microsecond=0)
+        target_time = now.replace(hour=, minute=38, second=0, microsecond=0)
 
         if now >= target_time:
             target_time += timedelta(days=1)
