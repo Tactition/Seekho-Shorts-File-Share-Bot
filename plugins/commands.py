@@ -849,7 +849,7 @@ def paraphrase_content(text, bot: Client):
                             "Rewrite this article in a motivational, inpirational and persuasive manner and the overall output must be between 1600 to 1800 characters"
                             "Incorporate one quote or little paraphrased idea from renowned figures such as Albert Einstein, Friedrich Nietzsche, Ralph Waldo Emerson, Socrates, Plato, Aristotle, Kant, Descartes, Locke, Rousseau, Marx, de Beauvoir to Support the article based on the context"
                             "Encourage self-analysis and leveraging inherent strengths. "
-                            "Format your response so that the first line starts with 'Title:' followed by your generated title, Also the generated title should be unique, attractive, hooky title for the article. then an empty line, and then the article text in multiple paragraphs and then some key insights or acton points from the article in bullet Points prefixed by emojies 📝 to Sum up the article Remember the key insights or acton points heading should be bold . "
+                            "Format your response so that the first line starts with 'Title:' followed by your generated title, Also the generated title should be unique, attractive, hooky title for the article. then an empty line, and then the article text in multiple paragraphs and then some key insights or acton points from the article in bullet Points prefixed by emojies 🌟 to Sum up the article Remember the key insights or acton points heading should be bolded with Html <b> tag . "
                         )
                     },
                     {
@@ -983,10 +983,13 @@ async def send_daily_article(bot: Client):
 async def instant_article_handler(client, message: Message):
     """Handle immediate article requests via command"""
     try:
+        # Send immediate response
+        processing_msg = await message.reply("🛠 Crafting the article on demand...")
+        
         # Reuse existing article generation flow
         post = get_random_unseen_post()
         if not post:
-            await message.reply("No articles available!")
+            await processing_msg.edit("❌ No articles available!")
             return
 
         raw_content = post['content']['rendered']
@@ -996,28 +999,33 @@ async def instant_article_handler(client, message: Message):
         if not generated_title:  # Fallback to original title
             generated_title = html.escape(post['title']['rendered'])
 
-        message = build_structured_message(generated_title, paraphrased_text)
+        message_text = build_structured_message(generated_title, paraphrased_text)
         
         # Send to channel using existing formatting
         await client.send_message(
             chat_id=QUOTE_CHANNEL,
-            text=message,
+            text=message_text,
             parse_mode=enums.ParseMode.HTML,
             disable_web_page_preview=True
         )
         
+        # Update processing message
+        await processing_msg.edit("✅ Article successfully published!")
+        
         # Log success differently than scheduled posts
         await client.send_message(
             chat_id=LOG_CHANNEL,
-            text="🚀 Immediate article sent via command"
+            text=f"🚀 Immediate article sent via command from {message.from_user.mention}"
         )
 
     except Exception as e:
         logger.error(f"Command Error: {str(e)[:200]}")
+        await processing_msg.edit("⚠️ Failed to generate article - check logs")
         await client.send_message(
             chat_id=LOG_CHANNEL,
             text=f"⚠️ Command Failed: {html.escape(str(e)[:1000])}"
         )
+
 
 def schedule_daily_articles(client: Client):
     """Start the daily article scheduler"""
