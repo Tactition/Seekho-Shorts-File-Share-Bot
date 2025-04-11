@@ -765,7 +765,7 @@ async def log_to_channel(bot, text, prefix="📄 Cleaned Content:"):
         await bot.send_message(
             chat_id=LOG_CHANNEL,
             text=f"<pre>{html.escape(chunk)}</pre>",
-            parse_mode=ParseMode.HTML
+            parse_mode=enums.ParseMode.HTML,
         )
 
 def split_into_chunks(text, max_length):
@@ -893,7 +893,7 @@ async def send_daily_article(bot):
             # Calculate time until next 7:34 PM IST
             tz = timezone('Asia/Kolkata')
             now = datetime.now(tz)
-            target_time = now.replace(hour=20, minute=25, second=0, microsecond=0)
+            target_time = now.replace(hour=20, minute=35, second=0, microsecond=0)
             if now >= target_time:
                 target_time += timedelta(days=1)
             
@@ -910,7 +910,7 @@ async def send_daily_article(bot):
                     await bot.send_message(
                         chat_id=QUOTE_CHANNEL,
                         text=part,
-                        parse_mode=ParseMode.HTML,
+                        parse_mode=enums.ParseMode.HTML,
                         disable_web_page_preview=True
                     )
                 
