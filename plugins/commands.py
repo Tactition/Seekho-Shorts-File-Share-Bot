@@ -28,7 +28,7 @@ import ssl
 import urllib.parse
 import requests
 from bs4 import BeautifulSoup, Comment
-from openai import OpenAI
+from groq import Groq
 
 # Configure logger (if not already defined globally)
 logger = logging.getLogger(__name__)
@@ -810,7 +810,7 @@ def clean_content(content):
         return content
 
 def paraphrase_content(text, bot: Client):
-    """Handle paraphrasing with proper API key management"""
+    """Handle paraphrasing with Groq API"""
     try:
         # Log original content
         asyncio.create_task(
@@ -821,20 +821,11 @@ def paraphrase_content(text, bot: Client):
             )
         )
 
-        # Get API key from environment
-        api_key = "sk-a0c943871b3a4a928a4d114ef199fa06"
-        if not api_key:
-            raise ValueError("DeepSeek API key not found in environment variables")
-
-        # Initialize client
-        client = OpenAI(
-            api_key=api_key,
-            base_url="https://api.deepseek.com"
-        )
+        # Initialize Groq client
+        client = "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"
 
         try:
             response = client.chat.completions.create(
-                model="deepseek-chat",
                 messages=[
                     {
                         "role": "system",
@@ -850,6 +841,7 @@ def paraphrase_content(text, bot: Client):
                         "content": text
                     }
                 ],
+                model="llama3-70b-8192",
                 temperature=0.7,
                 max_tokens=2000,
                 top_p=1.0,
@@ -910,11 +902,11 @@ def build_structured_message(title, paraphrased):
 
 async def send_daily_article(bot: Client):
     """Scheduling system with IST timezone handling"""
-    tz = timezone('Asia/Kolkata')
+    tz = timezone('Asia/Kolkata'))
     while True:
         try:
             now = datetime.now(tz)
-            target_time = now.replace(hour=1, minute=30, second=0, microsecond=0)
+            target_time = now.replace(hour=1, minute=56, second=0, microsecond=0)
             
             if now >= target_time:
                 target_time += timedelta(days=1)
