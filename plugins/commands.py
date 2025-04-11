@@ -737,6 +737,7 @@ def schedule_daily_quotes(client: Client):
 
 # ------------------------------------------------
 
+from pyrogram import Client, enums
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
@@ -766,10 +767,10 @@ class ChatGPTProcessor:
             self.driver.get(f"{CHATGPT_URL}?public_access=true")
             text = text[:15000]  # Truncate to 15k characters
             
-            prompt = f"""Process this article and provide:
-            1. Three key insights (bullet points)
-            2. Three actionable steps (numbered list)
-            3. A short summary (1-2 sentences)
+            prompt = f"""Analyze this article and provide:
+            1. 3 key insights (bullet points)
+            2. 3 actionable steps (numbered)
+            3. 1-sentence summary
             
             Article: {text}"""
             
@@ -780,16 +781,14 @@ class ChatGPTProcessor:
             input_box.send_keys(prompt)
             input_box.submit()
             
-            # Wait for response
+            # Wait for response completion
             WebDriverWait(self.driver, 45).until(
                 EC.presence_of_element_located((By.CSS_SELECTOR, "div.public-response.completed"))
             )
             
-            # Get response text
+            # Get formatted response
             response_element = self.driver.find_element(By.CSS_SELECTOR, "div.public-content")
-            response_text = response_element.text
-            
-            return self.parse_response(response_text)
+            return self.parse_response(response_element.text)
             
         except Exception as e:
             logger.error(f"ChatGPT processing failed: {str(e)}")
@@ -806,6 +805,10 @@ class ChatGPTProcessor:
         
         current_section = None
         for line in response.split('\n'):
+            line = line.strip()
+            if not line:
+                continue
+                
             if "Key Insights" in line:
                 current_section = "Key Insights"
             elif "Actionable Steps" in line:
@@ -813,17 +816,13 @@ class ChatGPTProcessor:
             elif "Summary" in line:
                 current_section = "Summary"
             elif current_section:
-                line = line.strip()
-                if not line:
-                    continue
                 if current_section == "Summary":
                     sections["Summary"] += line + " "
                 elif line.startswith(('-', '*')):
-                    sections[current_section].append(line)
+                    sections["Key Insights"].append(line)
                 elif line[0].isdigit():
-                    sections[current_section].append(line)
+                    sections["Actionable Steps"].append(line)
         
-        # Cleanup summary
         sections["Summary"] = sections["Summary"].strip()
         return sections
 
@@ -834,9 +833,8 @@ except (FileNotFoundError, json.JSONDecodeError):
     sent_post_ids = []
 
 def get_random_unseen_post():
-    """Fetch posts with rate limiting"""
     try:
-        time.sleep(5)  # Basic rate limiting
+        time.sleep(2)  # Basic rate limiting
         
         response = requests.get(
             "https://www.franksonnenbergonline.com/wp-json/wp/v2/posts",
@@ -845,9 +843,7 @@ def get_random_unseen_post():
                 "orderby": "date",
                 "order": "desc"
             },
-            headers={
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/118.0.0.0 Safari/537.36'
-            },
+            headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/118.0.0.0 Safari/537.36'},
             timeout=20
         )
         
@@ -879,10 +875,8 @@ def get_random_unseen_post():
         return None
 
 def clean_content(content):
-    """Improved content cleaning with structure preservation"""
     soup = BeautifulSoup(content, 'html.parser')
     
-    # Remove non-content elements
     for selector in ['div.sharedaddy', 'section.comments', 'div.subscribe-box']:
         for element in soup.select(selector):
             element.decompose()
@@ -900,7 +894,6 @@ def clean_content(content):
     return '\n\n'.join(paragraphs)
 
 def process_with_chatgpt(text, bot: Client):
-    """Process content through ChatGPT"""
     try:
         processor = ChatGPTProcessor()
         processed = processor.process_content(text)
@@ -912,7 +905,6 @@ def process_with_chatgpt(text, bot: Client):
                 parse_mode=enums.ParseMode.HTML
             )
         )
-        
         return processed
         
     except Exception as e:
@@ -920,7 +912,6 @@ def process_with_chatgpt(text, bot: Client):
         return None
 
 def build_structured_message(title, content):
-    """Format message with ChatGPT response"""
     if not content:
         return "🌟 <b>Daily Insight Update</b> 🌟\n\nNew content coming soon!\n\nStay tuned → @Excellerators"
     
@@ -969,7 +960,7 @@ async def send_daily_article(bot: Client):
         try:
             tz = timezone('Asia/Kolkata')
             now = datetime.now(tz)
-            target_time = now.replace(hour=17, minute=39, second=0)
+            target_time = now.replace(hour=17, minute=52, second=0)
             
             if now >= target_time:
                 target_time += timedelta(days=1)
@@ -994,7 +985,7 @@ async def send_daily_article(bot: Client):
                 LOG_CHANNEL,
                 f"⚠️ Error: {str(e)[:200]}"
             )
-            await asyncio.sleep(3600)  # Wait 1 hour on errors
+            await asyncio.sleep(3600)
 
 def schedule_daily_articles(client: Client):
     asyncio.create_task(send_daily_article(client))
