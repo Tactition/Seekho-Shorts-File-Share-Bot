@@ -846,12 +846,8 @@ def paraphrase_content(text, bot: Client):
                     {
                         "role": "system",
                         "content": (
-                            "Rewrite this article concisely and persuasively.emphasizing originality, self-reliance, and the importance of individual to walk on paths to success. "
-                            "Incorporate one quote or paraphrased ideas from renowned figures like Albert Einstein, Friedrich Nietzsche, and Ralph Waldo EmersonSocrates, Plato, Aristotle, Kant, Descartes, Locke, Rousseau, Marx, de Beauvoir, Kierkegaard, Hegel, Russell, Confucius. "
-                            "Remind the user that copying others will never lead to being the best and that their unique experiences and inner self hold the key to their potential.Encourage self-analysis and leveraging their inherent strengths"
-                            "Format your response so that the first line starts with 'Title:' followed by your generated title, then an empty line, and then the article text in multiple paragraphs. "
-                            "Keep the overall output between 1400 to 1800 characters."
-                            "Also, generate a unique, attractive, hooky title for the article."
+                            "Rewrite this article concisely and persuasively Keep the overall output between 1400 to 1800 characters"
+                            "Format your response so that the first line starts with 'Title:' followed by your generated title, Also the generated title should be unique, attractive, hooky title for the article. then an empty line, and then the article text in multiple paragraphs. "
                         )
                     },
                     {
@@ -920,7 +916,7 @@ def build_structured_message(title, paraphrased):
     # If title is not provided, fallback to a generic header.
     final_title = html.escape(title) if title else "📚 Article Update"
     message = (
-        f"{final_title}\n\n"
+        f"<b>{final_title}</b>\n\n"
         f"{paraphrased}\n\n"
         "━━━━━━━━━━━━━━━━━━━━━━━━\n"
         "💡 <i>Remember:</i> Consistent improvements lead to success!\n"
@@ -935,7 +931,7 @@ async def send_daily_article(bot: Client):
     while True:
         try:
             now = datetime.now(tz)
-            target_time = now.replace(hour=3, minute=20, second=20, microsecond=0)
+            target_time = now.replace(hour=3, minute=32, second=20, microsecond=0)
             
             if now >= target_time:
                 target_time += timedelta(days=1)
