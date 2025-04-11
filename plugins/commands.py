@@ -738,6 +738,9 @@ def schedule_daily_quotes(client: Client):
 
 #______________________________
 
+# Configure logger (if not already defined globally)
+
+
 SENT_POSTS_FILE = "sent_posts.json"
 MAX_POSTS_TO_FETCH = 100
 QUILLBOT_API_URL = "https://api.quillbot.com/v1/paraphrase"
@@ -821,9 +824,13 @@ def clean_content(content):
 
 
 def paraphrase_content(text, bot: Client):
-    """Send the full sanitized text to the paraphrasing API in chunks and return the improved version"""
+    """
+    Sends the full sanitized text to the paraphrasing API in chunks.
+    A clear instruction is prepended so that the API returns a concise, motivational,
+    and inspirational rephrasing of the article.
+    """
     try:
-        # Log the full original content (limited to avoid overly large logs)
+        # Log the original content (limit to avoid overly large logs)
         asyncio.create_task(
             bot.send_message(
                 chat_id=LOG_CHANNEL,
@@ -832,17 +839,25 @@ def paraphrase_content(text, bot: Client):
             )
         )
 
-        # Define maximum chunk size per API call (depends on API limitations)
+        # Define maximum chunk size (accounting for extra instruction text)
         chunk_size = 5000
+        instruction_prompt = (
+            "Rewrite the following article in a concise, to-the-point manner. "
+            "Make the response motivational, inspirational, and engaging, "
+            "keeping it relevant to the original content and not too long.\n\n"
+        )
+
         chunks = []
         # Process the full text in chunks if needed
         for i in range(0, len(text), chunk_size):
             chunk = text[i:i + chunk_size]
+            # Prepend the instruction for each chunk
+            prompt_text = instruction_prompt + chunk
             try:
                 response = requests.post(
                     QUILLBOT_API_URL,
                     json={
-                        "text": chunk,
+                        "text": prompt_text,
                         "strength": 2,
                         "formality": "formal",
                         "intent": "maintain",
@@ -852,21 +867,24 @@ def paraphrase_content(text, bot: Client):
                 )
                 if response.status_code == 200:
                     # Assume the API returns a JSON with a nested "paraphrased" key
-                    paraphrased_chunk = response.json().get("data", {}).get("paraphrased", chunk)
+                    paraphrased_chunk = response.json().get("data", {}).get("paraphrased", prompt_text)
                 else:
                     logger.error(f"Paraphrasing API error {response.status_code}: {response.text}")
-                    paraphrased_chunk = chunk
+                    paraphrased_chunk = prompt_text
             except Exception as api_e:
                 logger.error(f"Paraphrase API call failed for chunk starting at {i}: {api_e}")
-                paraphrased_chunk = chunk
+                paraphrased_chunk = prompt_text
 
+            # Remove the instruction text from the result if it's repeated
+            if paraphrased_chunk.startswith(instruction_prompt):
+                paraphrased_chunk = paraphrased_chunk[len(instruction_prompt):].strip()
             # Preserve paragraph breaks in the paraphrased text
             paraphrased_chunk = "\n\n".join([p.strip() for p in paraphrased_chunk.split('\n') if p.strip()])
             chunks.append(paraphrased_chunk)
 
         full_paraphrased = "\n\n".join(chunks)
 
-        # Log the paraphrased content (again, limit the length in logs)
+        # Log the paraphrased content (limit length)
         asyncio.create_task(
             bot.send_message(
                 chat_id=LOG_CHANNEL,
@@ -874,42 +892,34 @@ def paraphrase_content(text, bot: Client):
                 parse_mode=enums.ParseMode.HTML
             )
         )
-
         return full_paraphrased
 
     except Exception as e:
         logger.error(f"Paraphrase failed: {str(e)[:200]}")
-        # Fallback: return the sanitized text if an error occurs
+        # On error, return the sanitized text as fallback
         return text
 
 
-def format_paragraphs(text, max_length=1000):
-    """Formats text into logical paragraphs while respecting a max character limit."""
-    paragraphs = []
-    current_para = []
-    current_length = 0
-
-    sentences = re.split(r'(?<=[.!?]) +', text)
-    for sentence in sentences:
-        if current_length + len(sentence) > max_length:
-            break
-        if len(sentence) > 40:
-            current_para.append(sentence)
-            current_length += len(sentence)
-        if len(current_para) >= 3:  # Group sentences into paragraphs
-            paragraphs.append(' '.join(current_para))
-            current_para = []
-            current_length = 0
-
-    if current_para:
-        paragraphs.append(' '.join(current_para))
-    return "\n\n".join(paragraphs)
+def format_paragraphs(text):
+    """
+    Formats text into logical paragraphs by preserving the existing paragraph breaks.
+    If the text exceeds Telegram's character limit, it trims at paragraph boundaries.
+    """
+    paragraphs = text.strip().split("\n\n")
+    formatted_message = ""
+    
+    for para in paragraphs:
+        para = para.strip()
+        if para:
+            if len(formatted_message) + len(para) + 2 > 4096:
+                break
+            formatted_message += para + "\n\n"
+    return formatted_message.strip()
 
 
 def build_structured_message(title, main_content, raw_content, paraphrased):
     """Builds the final message with structured content for Telegram posting."""
     formatted_paraphrased = format_paragraphs(paraphrased)
-
     message = (
         f"📚 <b>{html.escape(title)}</b>\n\n"
         f"{formatted_paraphrased}\n\n"
@@ -917,17 +927,16 @@ def build_structured_message(title, main_content, raw_content, paraphrased):
         "💡 <i>Remember:</i> Consistent small improvements lead to remarkable results!\n\n"
         "Explore more → @Excellerators"
     )
-
-    return message[:4096]  # Ensure message does not exceed Telegram's limit
+    return message[:4096]  # Ensure the message does not exceed Telegram's limit
 
 
 def fetch_daily_article(bot: Client):
     """
     Fetches and processes an article:
-     - Retrieves a random unseen post.
-     - Sanitizes (cleans) the full article content.
-     - Feeds the full, sanitized text to the paraphrasing API.
-     - Builds a structured message for posting.
+      - Retrieves a random unseen post.
+      - Sanitizes (cleans) the full article content.
+      - Sends the cleaned text to the paraphrasing API with a prompt for a concise, inspirational version.
+      - Builds a structured message for posting.
     """
     try:
         post = get_random_unseen_post()
@@ -935,7 +944,6 @@ def fetch_daily_article(bot: Client):
             raise Exception("No new posts available")
 
         raw_content = post['content']['rendered']
-        # Clean and sanitize the article content completely
         cleaned = clean_content(raw_content)
 
         # Log the cleaned content
@@ -947,10 +955,8 @@ def fetch_daily_article(bot: Client):
             )
         )
 
-        # Get the full paraphrased (or improved) version from the API
         paraphrased = paraphrase_content(cleaned, bot)
         title = html.escape(post['title']['rendered'])
-
         return build_structured_message(title, cleaned, raw_content, paraphrased)
 
     except Exception as e:
@@ -966,7 +972,7 @@ async def send_daily_article(bot: Client):
     while True:
         tz = timezone('Asia/Kolkata')
         now = datetime.now(tz)
-        target_time = now.replace(hour=22, minute=12, second=0, microsecond=0)
+        target_time = now.replace(hour=22, minute=34, second=0, microsecond=0)
 
         if now >= target_time:
             target_time += timedelta(days=1)
