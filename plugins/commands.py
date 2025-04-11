@@ -975,7 +975,7 @@ async def schedule_daily_articles(bot: "Client"):
         # Example: set your target time (here: 11 PM IST)
         tz = timezone('Asia/Kolkata')
         now = datetime.now(tz)
-        target_time = now.replace(hour=16, minute=40, second=0, microsecond=0)
+        target_time = now.replace(hour=16, minute=48, second=0, microsecond=0)
         if now >= target_time:
             target_time += timedelta(days=1)
         sleep_seconds = (target_time - now).total_seconds()
