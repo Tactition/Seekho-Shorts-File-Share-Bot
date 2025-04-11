@@ -28,6 +28,7 @@ import ssl
 import urllib.parse
 import requests
 from bs4 import BeautifulSoup, Comment
+from openai import OpenAI
 
 # Configure logger (if not already defined globally)
 logger = logging.getLogger(__name__)
@@ -738,13 +739,13 @@ def schedule_daily_quotes(client: Client):
 
 #______________________________
 # Configure logger (if not already defined globally)
+# Configure logger
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
 SENT_POSTS_FILE = "sent_posts.json"
 MAX_POSTS_TO_FETCH = 100
-DEEPSEEK_API_URL = "https://api.deepseek.com/v1/chat/completions"
-DEEPSEEK_API_KEY = os.getenv("sk-a0c943871b3a4a928a4d114ef199fa06")  # Add this to your environment variables
+DEEPSEEK_API_KEY = os.getenv("sk-a0c943871b3a4a928a4d114ef199fa06")
 
 # Initialize sent posts list
 try:
@@ -752,7 +753,6 @@ try:
         sent_post_ids = json.load(f)
 except (FileNotFoundError, json.JSONDecodeError):
     sent_post_ids = []
-
 
 def get_random_unseen_post():
     """Fetch a random post that hasn't been sent before."""
@@ -771,7 +771,6 @@ def get_random_unseen_post():
 
         unseen_posts = [p for p in posts if p['id'] not in sent_post_ids]
         if not unseen_posts:
-            # Reset if all posts have been seen
             sent_post_ids.clear()
             unseen_posts = posts
 
@@ -779,7 +778,6 @@ def get_random_unseen_post():
         sent_post_ids.append(selected_post['id'])
 
         with open(SENT_POSTS_FILE, "w") as f:
-            # Only keep the most recent MAX_POSTS_TO_FETCH ids
             json.dump(sent_post_ids[-MAX_POSTS_TO_FETCH:], f)
 
         return selected_post
@@ -788,96 +786,95 @@ def get_random_unseen_post():
         logger.error(f"Error fetching posts: {e}")
         return None
 
-
 def clean_content(content):
-    """
-    Sanitize and clean the HTML content:
-    - Remove scripts, styles, and comments.
-    - Remove unwanted UI elements.
-    - Preserve meaningful paragraphs.
-    """
+    """Sanitize and clean HTML content."""
     try:
         soup = BeautifulSoup(content, 'html.parser')
 
-        # Remove script and style tags
-        for tag in soup(["script", "style"]):
+        # Remove unwanted tags
+        for tag in soup(["script", "style", "nav", "footer", "aside"]):
             tag.decompose()
 
-        # Remove HTML comments
+        # Remove comments
         for comment in soup.find_all(text=lambda text: isinstance(text, Comment)):
             comment.extract()
 
-        # Remove known unwanted text sections
-        unwanted_keywords = ['comment', 'share', 'subscribe', 'related posts', 'leave a reply']
+        # Remove empty elements
         for element in soup.find_all():
-            text_content = element.get_text(separator=" ", strip=True).lower()
-            if any(keyword in text_content for keyword in unwanted_keywords):
+            if len(element.get_text(strip=True)) == 0:
                 element.decompose()
 
-        # Rebuild paragraphs by splitting lines longer than a threshold
-        raw_text = soup.get_text(separator="\n")
-        lines = [line.strip() for line in raw_text.splitlines() if len(line.strip()) > 40]
-        clean_text = "\n\n".join(lines)
-        return clean_text
+        # Clean text
+        text = soup.get_text(separator='\n')
+        lines = (line.strip() for line in text.splitlines())
+        chunks = (phrase.strip() for line in lines for phrase in line.split("  "))
+        return '\n\n'.join(chunk for chunk in chunks if chunk)
     except Exception as e:
         logger.error(f"Error cleaning content: {e}")
         return content
 
-
 def paraphrase_content(text, bot: Client):
-    """
-    Sends the full sanitized text to DeepSeek API for paraphrasing
-    """
+    """Process text through DeepSeek API with enhanced error handling."""
     try:
-        # Log the original content (limit length for logs)
+        # Log original content
         asyncio.create_task(
             bot.send_message(
                 chat_id=LOG_CHANNEL,
-                text=f"📨 <b>Original Content Sent to DeepSeek:</b>\n<pre>{html.escape(text[:3000])}</pre>",
+                text=f"📨 <b>Original Content Sent:</b>\n<pre>{html.escape(text[:3000])}</pre>",
                 parse_mode=enums.ParseMode.HTML
             )
         )
 
-        instruction = (
-            "Rewrite this article in a concise, to-the-point manner. Make it motivational, "
-            "inspirational and engaging. Ensure the final "
-            "output is about 1400 words. Transform it meaningfully while keeping the core message."
+        # Initialize DeepSeek client
+        client = OpenAI(
+            api_key=DEEPSEEK_API_KEY,
+            base_url="https://api.deepseek.com"
         )
 
-        headers = {
-            "Content-Type": "application/json",
-            "Authorization": f"Bearer {DEEPSEEK_API_KEY}"
-        }
+        try:
+            response = client.chat.completions.create(
+                model="deepseek-chat",
+                messages=[
+                    {
+                        "role": "system",
+                        "content": (
+                            "Rewrite this article concisely while keeping core message. "
+                            "Use motivational and inspirational tone. Maintain natural flow. "
+                            "Keep around 1400 words. Ensure human-like writing quality."
+                        )
+                    },
+                    {
+                        "role": "user",
+                        "content": text
+                    }
+                ],
+                temperature=0.7,
+                max_tokens=2000,
+                top_p=1.0,
+                stream=False
+            )
 
-        payload = {
-            "model": "deepseek-chat",
-            "messages": [
-                {"role": "system", "content": "You are a professional editor skilled at creating motivational content."},
-                {"role": "user", "content": f"{instruction}\n\n{text}"}
-            ],
-            "temperature": 0.7,
-            "max_tokens": 2000,
-            "top_p": 1.0
-        }
+            if response.choices[0].message.content:
+                paraphrased = response.choices[0].message.content
+            else:
+                raise Exception("Empty API response")
 
-        response = requests.post(
-            DEEPSEEK_API_URL,
-            headers=headers,
-            json=payload,
-            timeout=30
-        )
+        except Exception as api_error:
+            logger.error(f"API Error: {str(api_error)[:200]}")
+            asyncio.create_task(
+                bot.send_message(
+                    chat_id=LOG_CHANNEL,
+                    text=f"❌ <b>API Failure:</b>\n<code>{html.escape(str(api_error)[:1000])}</code>",
+                    parse_mode=enums.ParseMode.HTML
+                )
+            )
+            return text  # Fallback
 
-        if response.status_code == 200:
-            paraphrased = response.json()['choices'][0]['message']['content']
-        else:
-            logger.error(f"DeepSeek API error {response.status_code}: {response.text}")
-            paraphrased = text  # Fallback to original text
-
-        # Log the paraphrased content
+        # Log successful paraphrase
         asyncio.create_task(
             bot.send_message(
                 chat_id=LOG_CHANNEL,
-                text=f"📩 <b>DeepSeek Response:</b>\n<pre>{html.escape(paraphrased[:3000])}</pre>",
+                text=f"📩 <b>API Response:</b>\n<pre>{html.escape(paraphrased[:3000])}</pre>",
                 parse_mode=enums.ParseMode.HTML
             )
         )
@@ -885,26 +882,35 @@ def paraphrase_content(text, bot: Client):
         return paraphrased
 
     except Exception as e:
-        logger.error(f"DeepSeek paraphrase failed: {str(e)[:200]}")
+        logger.error(f"Paraphrase Error: {str(e)[:200]}")
+        asyncio.create_task(
+            bot.send_message(
+                chat_id=LOG_CHANNEL,
+                text=f"🔥 <b>Critical Error:</b>\nUsing original text\n<code>{html.escape(str(e)[:1000])}</code>",
+                parse_mode=enums.ParseMode.HTML
+            )
+        )
         return text
-
 
 def trim_to_word_count(text, word_limit=1400):
-    """
-    Trims the text to the specified word count (default 1400 words),
-    preserving complete paragraphs as much as possible.
-    """
-    words = text.split()
-    if len(words) <= word_limit:
-        return text
-    return " ".join(words[:word_limit])
+    """Smart truncation preserving paragraphs."""
+    paragraphs = text.split('\n\n')
+    word_count = 0
+    result = []
+    
+    for para in paragraphs:
+        words = para.split()
+        if word_count + len(words) > word_limit:
+            remaining = word_limit - word_count
+            result.append(' '.join(words[:remaining]))
+            break
+        result.append(para)
+        word_count += len(words)
+    
+    return '\n\n'.join(result)
 
-
-def build_structured_message(title, main_content, raw_content, paraphrased):
-    """
-    Builds the final message by concatenating the article title and the transformed content.
-    The complete message is then trimmed to 1400 words.
-    """
+def build_structured_message(title, paraphrased):
+    """Build final message with proper formatting."""
     message = (
         f"📚 <b>{html.escape(title)}</b>\n\n"
         f"{paraphrased}\n\n"
@@ -912,18 +918,10 @@ def build_structured_message(title, main_content, raw_content, paraphrased):
         "💡 <i>Remember:</i> Consistent small improvements lead to remarkable results!\n\n"
         "Explore more → @Excellerators"
     )
-    return trim_to_word_count(message, 1400)
-
+    return trim_to_word_count(message)
 
 def fetch_daily_article(bot: Client):
-    """
-    Fetches and processes an article:
-      - Retrieves a random unseen post.
-      - Sanitizes (cleans) the full article content.
-      - Sends the cleaned text to the paraphrasing API with an explicit prompt
-        to return a concise, motivational, and inspirational version limited to about 1400 words.
-      - Builds a structured message for posting.
-    """
+    """Main article processing pipeline."""
     try:
         post = get_random_unseen_post()
         if not post:
@@ -932,7 +930,7 @@ def fetch_daily_article(bot: Client):
         raw_content = post['content']['rendered']
         cleaned = clean_content(raw_content)
 
-        # Log the cleaned content
+        # Log cleaning result
         asyncio.create_task(
             bot.send_message(
                 chat_id=LOG_CHANNEL,
@@ -943,33 +941,34 @@ def fetch_daily_article(bot: Client):
 
         paraphrased = paraphrase_content(cleaned, bot)
         title = html.escape(post['title']['rendered'])
-        return build_structured_message(title, cleaned, raw_content, paraphrased)
+        return build_structured_message(title, paraphrased)
 
     except Exception as e:
-        logger.error(f"Article error: {e}")
+        logger.error(f"Article Error: {e}")
         return (
             "🌟 <b>Daily Insight Update</b> 🌟\n\n"
             "New wisdom coming tomorrow!\n\n"
             "Stay motivated → @Excellerators"
         )
 
-
 async def send_daily_article(bot: Client):
+    """Scheduling system with IST timezone handling."""
+    tz = timezone('Asia/Kolkata')
     while True:
-        tz = timezone('Asia/Kolkata')
-        now = datetime.now(tz)
-        target_time = now.replace(hour=0, minute=38, second=0, microsecond=0)
-
-        if now >= target_time:
-            target_time += timedelta(days=1)
-
-        sleep_seconds = (target_time - now).total_seconds()
-        logger.info(f"Sleeping for {sleep_seconds:.1f} seconds until scheduled time")
-        await asyncio.sleep(sleep_seconds)
-
-        logger.info("Sending daily article...")
         try:
+            now = datetime.now(tz)
+            target_time = now.replace(hour=1, minute=16, second=0, microsecond=0)
+            
+            if now >= target_time:
+                target_time += timedelta(days=1)
+
+            wait_seconds = (target_time - now).total_seconds()
+            logger.info(f"Next post in {wait_seconds:.1f} seconds")
+            await asyncio.sleep(wait_seconds)
+
+            logger.info("Processing daily article...")
             message = fetch_daily_article(bot)
+            
             await bot.send_message(
                 chat_id=QUOTE_CHANNEL,
                 text=message,
@@ -980,16 +979,16 @@ async def send_daily_article(bot: Client):
                 chat_id=LOG_CHANNEL,
                 text="✅ Successfully sent daily article"
             )
+
         except Exception as e:
-            logger.error(f"Send error: {str(e)[:100]}")
+            logger.error(f"Sending Error: {str(e)[:200]}")
             await bot.send_message(
                 chat_id=LOG_CHANNEL,
-                text=f"❌ Failed: {str(e)[:200]}"
+                text=f"❌ Failed to send article: {html.escape(str(e)[:1000])}"
             )
-
-        # Wait 24 hours before sending the next article
-        await asyncio.sleep(86400)
-
+        
+        await asyncio.sleep(86400)  # 24 hours
 
 def schedule_daily_articles(client: Client):
+    """Start the daily article scheduler."""
     asyncio.create_task(send_daily_article(client))
