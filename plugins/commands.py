@@ -753,7 +753,7 @@ except (FileNotFoundError, json.JSONDecodeError):
 
 
 def get_random_unseen_post():
-    """Fetch a random post that hasn't been sent before"""
+    """Fetch a random post that hasn't been sent before."""
     try:
         response = requests.get(
             "https://www.franksonnenbergonline.com/wp-json/wp/v2/posts",
@@ -805,14 +805,14 @@ def clean_content(content):
         for comment in soup.find_all(text=lambda text: isinstance(text, Comment)):
             comment.extract()
 
-        # Optionally, remove known unwanted text sections
+        # Remove known unwanted text sections
         unwanted_keywords = ['comment', 'share', 'subscribe', 'related posts', 'leave a reply']
         for element in soup.find_all():
             text_content = element.get_text(separator=" ", strip=True).lower()
             if any(keyword in text_content for keyword in unwanted_keywords):
                 element.decompose()
 
-        # Extract text and rebuild paragraphs while filtering very short lines
+        # Rebuild paragraphs by splitting lines longer than a threshold
         raw_text = soup.get_text(separator="\n")
         lines = [line.strip() for line in raw_text.splitlines() if len(line.strip()) > 40]
         clean_text = "\n\n".join(lines)
@@ -825,12 +825,12 @@ def clean_content(content):
 def paraphrase_content(text, bot: Client):
     """
     Sends the full sanitized text to the paraphrasing API in chunks.
-    A clear instruction is prepended so that the API returns a concise,
-    motivational and inspirational version while preserving natural paragraphs,
-    limited to a maximum of 1400 words.
+    Prepend an instruction prompt so that the API returns a concise,
+    motivational, inspirational, and engaging version of the article.
+    The output should aim to be about 1400 words.
     """
     try:
-        # Log the original content (limit to avoid overly large logs)
+        # Log the original content (limit length for logs)
         asyncio.create_task(
             bot.send_message(
                 chat_id=LOG_CHANNEL,
@@ -839,13 +839,14 @@ def paraphrase_content(text, bot: Client):
             )
         )
 
-        # Define maximum chunk size (accounting for the extra instruction text)
+        # Define the maximum chunk size (leave room for the instruction prompt)
         chunk_size = 5000
         instruction_prompt = (
             "Rewrite the following article in a concise, to-the-point manner. "
             "Make the response motivational, inspirational, and engaging. "
-            "Preserve the natural paragraph structure without breaking paragraphs arbitrarily. "
-            "Limit the output to a maximum of 1400 words.\n\n"
+            "Preserve natural paragraph structure without breaking paragraphs arbitrarily. "
+            "Ensure the final output is about 1400 words in total. "
+            "Do not simply echo the original content; transform it meaningfully.\n\n"
         )
 
         chunks = []
@@ -877,14 +878,12 @@ def paraphrase_content(text, bot: Client):
             # Remove the instruction text from the result if present
             if paraphrased_chunk.startswith(instruction_prompt):
                 paraphrased_chunk = paraphrased_chunk[len(instruction_prompt):].strip()
-
-            # We trust the API to preserve natural paragraphs now,
-            # so no additional reflowing is done here.
+            # No reflowing here—the API is expected to preserve the paragraph breaks.
             chunks.append(paraphrased_chunk)
 
         full_paraphrased = "\n\n".join(chunks)
 
-        # Log the paraphrased content (limit the logged length)
+        # Log the paraphrased content (limit logged text)
         asyncio.create_task(
             bot.send_message(
                 chat_id=LOG_CHANNEL,
@@ -896,28 +895,25 @@ def paraphrase_content(text, bot: Client):
 
     except Exception as e:
         logger.error(f"Paraphrase failed: {str(e)[:200]}")
-        # On error, return the sanitized text as fallback
+        # If an error occurs, return the sanitized text as a fallback.
         return text
 
 
-def trim_message(text, limit=4096):
+def trim_to_word_count(text, word_limit=1400):
     """
-    Trims the message to the Telegram limit without breaking a paragraph in the middle if possible.
+    Trims the text to the specified word count (default 1400 words),
+    preserving complete paragraphs as much as possible.
     """
-    if len(text) <= limit:
+    words = text.split()
+    if len(words) <= word_limit:
         return text
-    # Find the last newline before the limit
-    pos = text[:limit].rfind("\n")
-    if pos == -1:
-        return text[:limit]
-    return text[:pos]
+    return " ".join(words[:word_limit])
 
 
 def build_structured_message(title, main_content, raw_content, paraphrased):
     """
-    Builds the final message with the article title and the paraphrased content.
-    Uses the API output as-is (with preserved natural paragraphs) and trims
-    it to Telegram's message limit.
+    Builds the final message by concatenating the article title and the transformed content.
+    The complete message is then trimmed to 1400 words.
     """
     message = (
         f"📚 <b>{html.escape(title)}</b>\n\n"
@@ -926,7 +922,7 @@ def build_structured_message(title, main_content, raw_content, paraphrased):
         "💡 <i>Remember:</i> Consistent small improvements lead to remarkable results!\n\n"
         "Explore more → @Excellerators"
     )
-    return trim_message(message, 4096)
+    return trim_to_word_count(message, 1400)
 
 
 def fetch_daily_article(bot: Client):
@@ -934,9 +930,9 @@ def fetch_daily_article(bot: Client):
     Fetches and processes an article:
       - Retrieves a random unseen post.
       - Sanitizes (cleans) the full article content.
-      - Sends the cleaned text to the paraphrasing API with a prompt for a concise,
-        inspirational version limited to 1400 words.
-      - Builds a structured message for Telegram posting.
+      - Sends the cleaned text to the paraphrasing API with an explicit prompt
+        to return a concise, motivational, and inspirational version limited to about 1400 words.
+      - Builds a structured message for posting.
     """
     try:
         post = get_random_unseen_post()
@@ -972,7 +968,7 @@ async def send_daily_article(bot: Client):
     while True:
         tz = timezone('Asia/Kolkata')
         now = datetime.now(tz)
-        target_time = now.replace(hour=22, minute=47, second=0, microsecond=0)
+        target_time = now.replace(hour=23, minute=04, second=0, microsecond=0)
 
         if now >= target_time:
             target_time += timedelta(days=1)
@@ -1001,7 +997,7 @@ async def send_daily_article(bot: Client):
                 text=f"❌ Failed: {str(e)[:200]}"
             )
 
-        # Wait 24 hours before next article send
+        # Wait 24 hours before sending the next article
         await asyncio.sleep(86400)
 
 
