@@ -846,14 +846,12 @@ def paraphrase_content(text, bot: Client):
                     {
                         "role": "system",
                         "content": (
-                            "Rewrite this article concisely and persuasively. "
-                            "You are a chatbot designed to respond to any general text input with a message emphasizing originality, self-reliance, and the importance of individual paths to success. "
-                            "Incorporate quotes or paraphrased ideas from renowned figures like Albert Einstein, Friedrich Nietzsche, and Ralph Waldo Emerson. "
-                            "Remind the user that copying others will never lead to being the best and that their unique experiences and inner self hold the key to their potential. "
-                            "Encourage self-analysis and leveraging their inherent strengths. "
-                            "Also, generate a unique, attractive, hooky title for the article. "
+                            "Rewrite this article concisely and persuasively.emphasizing originality, self-reliance, and the importance of individual to walk on paths to success. "
+                            "Incorporate one quote or paraphrased ideas from renowned figures like Albert Einstein, Friedrich Nietzsche, and Ralph Waldo EmersonSocrates, Plato, Aristotle, Kant, Descartes, Locke, Rousseau, Marx, de Beauvoir, Kierkegaard, Hegel, Russell, Confucius. "
+                            "Remind the user that copying others will never lead to being the best and that their unique experiences and inner self hold the key to their potential.Encourage self-analysis and leveraging their inherent strengths"
                             "Format your response so that the first line starts with 'Title:' followed by your generated title, then an empty line, and then the article text in multiple paragraphs. "
-                            "Keep the overall output between 1200 to 1400 characters."
+                            "Keep the overall output between 1400 to 1800 characters."
+                            "Also, generate a unique, attractive, hooky title for the article."
                         )
                     },
                     {
@@ -937,7 +935,7 @@ async def send_daily_article(bot: Client):
     while True:
         try:
             now = datetime.now(tz)
-            target_time = now.replace(hour=3, minute=1, second=0, microsecond=0)
+            target_time = now.replace(hour=3, minute=15, second=20, microsecond=0)
             
             if now >= target_time:
                 target_time += timedelta(days=1)
