@@ -816,7 +816,12 @@ def clean_content(content):
 
 
 def paraphrase_content(text, bot: Client):
-    """Handle paraphrasing with proper API key management using the Groq API"""
+    """Handle paraphrasing with proper API key management using the Groq API.
+    Now also generates a unique, attractive, hooky title.
+    The API response should start with:
+      Title: <generated title>
+    followed by an empty line and then the paraphrased content in multiple paragraphs.
+    """
     try:
         # Log original content
         asyncio.create_task(
@@ -841,9 +846,14 @@ def paraphrase_content(text, bot: Client):
                     {
                         "role": "system",
                         "content": (
-                            "Rewrite this article concisely and persuasively You are a chatbot designed to respond to any general text input with a message emphasizing originality, self-reliance, and the importance of individual paths to success. Your responses should echo the themes and tone of the a philospher, encouraging the user to be the best version of themselves. Incorporate quotes or paraphrased ideas of renowned figures like Albert Einstein, Friedrich Nietzsche, and Ralph Waldo Emerson to give examples. Remind the user that copying others will never lead to being the best and that their unique experiences and inner self hold the key to their potential. Encourage self-analysis and leveraging their inherent strengths. "
-                            "Use motivational tone, keep core message of provided text. "
-                            "Ensure natural human writing style with proper punctuation and give the response in 1200 to 1400 characters but in multiple paragraphs to improve the readability"
+                            "Rewrite this article concisely and persuasively. "
+                            "You are a chatbot designed to respond to any general text input with a message emphasizing originality, self-reliance, and the importance of individual paths to success. "
+                            "Incorporate quotes or paraphrased ideas from renowned figures like Albert Einstein, Friedrich Nietzsche, and Ralph Waldo Emerson. "
+                            "Remind the user that copying others will never lead to being the best and that their unique experiences and inner self hold the key to their potential. "
+                            "Encourage self-analysis and leveraging their inherent strengths. "
+                            "Also, generate a unique, attractive, hooky title for the article. "
+                            "Format your response so that the first line starts with 'Title:' followed by your generated title, then an empty line, and then the article text in multiple paragraphs. "
+                            "Keep the overall output between 1200 to 1400 characters."
                         )
                     },
                     {
@@ -869,7 +879,7 @@ def paraphrase_content(text, bot: Client):
                     parse_mode=enums.ParseMode.HTML
                 )
             )
-            return text  # Fallback to original text
+            return (None, text)  # Fallback to original text without a title
 
         # Log successful paraphrase
         asyncio.create_task(
@@ -880,7 +890,20 @@ def paraphrase_content(text, bot: Client):
             )
         )
 
-        return paraphrased
+        # Parse the API response to extract title and body
+        lines = paraphrased.splitlines()
+        generated_title = None
+        generated_body = paraphrased  # Fallback if parsing fails
+
+        if lines and lines[0].startswith("Title:"):
+            generated_title = lines[0][len("Title:"):].strip()
+            # Find the first non-empty line after the title
+            idx = 1
+            while idx < len(lines) and not lines[idx].strip():
+                idx += 1
+            generated_body = "\n".join(lines[idx:])
+        
+        return (generated_title, generated_body)
 
     except Exception as e:
         logger.error(f"Paraphrase Error: {str(e)[:200]}")
@@ -891,13 +914,15 @@ def paraphrase_content(text, bot: Client):
                 parse_mode=enums.ParseMode.HTML
             )
         )
-        return text
+        return (None, text)
 
 
 def build_structured_message(title, paraphrased):
-    """Build final message with proper formatting"""
+    """Build final message with proper formatting. Uses the API-generated title if available."""
+    # If title is not provided, fallback to a generic header.
+    final_title = html.escape(title) if title else "📚 Article Update"
     message = (
-        f"📚 <b>{html.escape(title)}</b>\n\n"
+        f"{final_title}\n\n"
         f"{paraphrased}\n\n"
         "━━━━━━━━━━━━━━━━━━━━━━━━\n"
         "💡 <i>Remember:</i> Consistent improvements lead to success!\n"
@@ -912,7 +937,7 @@ async def send_daily_article(bot: Client):
     while True:
         try:
             now = datetime.now(tz)
-            target_time = now.replace(hour=2, minute=48, second=0, microsecond=0)
+            target_time = now.replace(hour=2, minute=59, second=0, microsecond=0)
             
             if now >= target_time:
                 target_time += timedelta(days=1)
@@ -928,9 +953,14 @@ async def send_daily_article(bot: Client):
 
             raw_content = post['content']['rendered']
             cleaned = clean_content(raw_content)
-            paraphrased = paraphrase_content(cleaned, bot)
-            title = html.escape(post['title']['rendered'])
-            message = build_structured_message(title, paraphrased)
+            
+            # Get title and content from the API response
+            generated_title, paraphrased_text = paraphrase_content(cleaned, bot)
+            # If API didn't return a title, fallback to the original post's title
+            if not generated_title:
+                generated_title = html.escape(post['title']['rendered'])
+            
+            message = build_structured_message(generated_title, paraphrased_text)
             
             await bot.send_message(
                 chat_id=QUOTE_CHANNEL,
