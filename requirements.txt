@@ -20,6 +20,6 @@ itsdangerous==2.0.1
 selenium
 
 webdriver-manager>=3.0
-openai>=1.0.0
+groq  
 
 
