@@ -737,11 +737,28 @@ def schedule_daily_quotes(client: Client):
 
 #______________________________
 
+# ------------------------------------------------
+import requests
+from bs4 import BeautifulSoup
+import json
+import random
+import re
+import html
+import logging
+import asyncio
+from datetime import datetime, timedelta
+from pytz import timezone
+from telegram.constants import ParseMode
+
+# Constants
 SENT_POSTS_FILE = "sent_posts.json"
 MAX_POSTS_TO_FETCH = 100
 QUILLBOT_API_URL = "https://api.quillbot.com/v1/paraphrase"
-
 # Logging configuration
+logging.basicConfig(
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    level=logging.INFO
+)
 logger = logging.getLogger(__name__)
 
 # ----------------------------------------------------------------
@@ -760,7 +777,7 @@ async def log_to_channel(bot, text, prefix="📄 Cleaned Content:"):
         await bot.send_message(
             chat_id=LOG_CHANNEL,
             text=f"<pre>{html.escape(chunk)}</pre>",
-            parse_mode=enums.ParseMode.HTML
+            parse_mode=ParseMode.HTML
         )
 
 def split_into_chunks(text, max_length):
@@ -852,7 +869,10 @@ def build_structured_message(title, paraphrased):
 async def fetch_daily_article(bot):
     """Main processing pipeline"""
     try:
-        post = get_random_unseen_post()
+        loop = asyncio.get_running_loop()
+        
+        # Run blocking operations in executor
+        post = await loop.run_in_executor(None, get_random_unseen_post)
         if not post:
             return None
             
@@ -860,17 +880,15 @@ async def fetch_daily_article(bot):
         title = post['title']['rendered']
         
         # Clean and log original
-        cleaned = clean_content(raw_content)
+        cleaned = await loop.run_in_executor(None, clean_content, raw_content)
         await log_to_channel(bot, cleaned, "🧹 Original Cleaned Content:")
         
         # Paraphrase and log result
-        paraphrased = paraphrase_content(cleaned)
+        paraphrased = await loop.run_in_executor(None, paraphrase_content, cleaned)
         await log_to_channel(bot, paraphrased, "🔄 Quillbot Output:")
         
         return {
             'title': title,
-            'cleaned': cleaned,
-            'paraphrased': paraphrased,
             'message_parts': build_structured_message(title, paraphrased)
         }
         
@@ -887,7 +905,7 @@ async def send_daily_article(bot):
             # Calculate time until next 7:34 PM IST
             tz = timezone('Asia/Kolkata')
             now = datetime.now(tz)
-            target_time = now.replace(hour=20, minute=8, second=0, microsecond=0)
+            target_time = now.replace(hour=20, minute=19, second=0, microsecond=0)
             if now >= target_time:
                 target_time += timedelta(days=1)
             
@@ -896,15 +914,15 @@ async def send_daily_article(bot):
             await asyncio.sleep(wait_seconds)
             
             # Process and send article
-            result = await asyncio.to_thread(fetch_daily_article, bot)
+            result = await fetch_daily_article(bot)
             
-            if result and result['message_parts']:
+            if result and result.get('message_parts'):
                 # Send all message parts to main channel
                 for part in result['message_parts']:
                     await bot.send_message(
                         chat_id=QUOTE_CHANNEL,
                         text=part,
-                        parse_mode=enums.ParseMode.HTML,
+                        parse_mode=ParseMode.HTML,
                         disable_web_page_preview=True
                     )
                 
@@ -922,4 +940,3 @@ async def send_daily_article(bot):
 
 def schedule_daily_articles(client):
     asyncio.create_task(send_daily_article(client))
-
