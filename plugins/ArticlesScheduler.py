@@ -272,10 +272,10 @@ def paraphrase_content(text: str, bot: Client) -> tuple:
             "<b>[Emoji] Title Text</b> (Max 7 words)\n"
             "   Example: <b>🔥 Igniting the Spark: Unleash Greatness in Everyone</b>\n\n"
             
-            "<blockquote><i>[Philosopher Quote]</i> — <b>[Philosopher Name]</b></blockquote>\n\n"
+            "<blockquote><i>[Philosopher Quote]</i> — <b>[Philosopher Name]</b></blockquote>\n"
             "(Select quotes from Aristotle, Nietzsche, Plato, Socrates or other philosophers)\n\n"
             
-            "Core Content (2-3 paragraphs, 4-5 lines each in motivational, inspirational, and persuasive manner):\n"
+            "Core Content (2-3 paragraphs, 2-4 lines each in motivational, inspirational, and persuasive manner):\n"
             "   - First paragraph: State core philosophy\n"
             "   - Second paragraph: Ask rhetorical question\n"
             "   - Third paragraph: Include real-world example\n\n"
@@ -285,19 +285,19 @@ def paraphrase_content(text: str, bot: Client) -> tuple:
             "   🔹 <b>Principle 2</b>: Concise implementation\n"
             "   🔹 <b>Principle 3</b>: Concise implementation\n\n"
             
-            "<u>Actionable Insights:</u>\n"
+            "<b><u>Actionable Insights:</u></b>\n"
             "   🌟 <b>Insight 1:</b> Specific action\n"
             "   🌟 <b>Insight 2:</b> Specific action\n"
             "   🌟 <b>Insight 3:</b> Specific action\n\n"
             
             "Closing Format:\n"
-            "✨ [Motivational closing statement]\n"
+            "✨ [Motivational closing statement]\n\n"
             "[3 relevant hashtags]\n"
             
             "Formatting Rules:\n"
             "- Use ONLY these HTML tags: <b>, <i>, <u>, <blockquote>\n"
             "- Maintain 1400-1700 character limit\n"
-            "- 🔹 for principles / 🌟 for insights\n"
+            "-🔹 for principles / 🌟 for insights\n"
             "- No markdown, only <b>, <i>, <blockquote> tags\n"
             "- 1 emoji in title (🔥/🌟/✨/📚) \n"
             "- Conversational yet authoritative tone\n"
@@ -386,7 +386,7 @@ async def send_daily_article(bot: Client):
     while True:
         try:
             now = datetime.now(tz)
-            target_time = now.replace(hour=16, minute=32, second=20, microsecond=0)
+            target_time = now.replace(hour=16, minute=52, second=20, microsecond=0)
             if now >= target_time:
                 target_time += timedelta(days=1)
             wait_seconds = (target_time - now).total_seconds()
