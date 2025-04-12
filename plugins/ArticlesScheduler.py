@@ -457,6 +457,73 @@ def schedule_daily_articles(client: Client):
     asyncio.create_task(send_daily_article(client))
 
 
+
+# =============================
+# COMMAND HANDLER FOR INSTANT QUOTE
+# =============================
+
+@Client.on_message(filters.command('quote') & filters.user(ADMINS))
+async def instant_quote_handler(client, message: Message):
+    """Handles /quote command to immediately send & broadcast quote"""
+    try:
+        processing_msg = await message.reply("✨ Preparing inspirational quote...")
+        
+        # Fetch quote
+        quote = fetch_random_quote()
+        
+        # Send to quote channel
+        await client.send_message(
+            chat_id=QUOTE_CHANNEL,
+            text=quote,
+            parse_mode=enums.ParseMode.MARKDOWN
+        )
+        
+        # Broadcast to users (reusing daily logic)
+        users_cursor = await db.get_all_users()
+        total_users = await db.col.count_documents({'name': {'$exists': True}})
+        
+        sent = blocked = deleted = failed = 0
+        start_time = time.time()
+
+        async for user in users_cursor:
+            if 'id' not in user or 'name' not in user:
+                continue
+            user_id = int(user['id'])
+            try:
+                await client.send_message(chat_id=user_id, text=quote)
+                sent += 1
+            except FloodWait as e:
+                await asyncio.sleep(e.value)
+                continue
+            except (InputUserDeactivated, UserIsBlocked, PeerIdInvalid):
+                await db.delete_user(user_id)
+                deleted += 1
+            except Exception as e:
+                failed += 1
+                logger.error(f"User {user_id} error: {e}")
+
+        # Log results
+        broadcast_time = timedelta(seconds=int(time.time() - start_time))
+        summary = (
+            f"✅ Immediate Quote Broadcast Completed\n"
+            f"Total: {total_users} | Sent: {sent}\n"
+            f"Cleaned: {deleted} | Failed: {failed}"
+        )
+        
+        await processing_msg.edit("✅ Quote broadcasted to all users!")
+        await client.send_message(
+            chat_id=LOG_CHANNEL,
+            text=f"🚀 Immediate quote sent by {message.from_user.mention}\n{summary}"
+        )
+
+    except Exception as e:
+        logger.exception("Quote command error:")
+        await processing_msg.edit("⚠️ Broadcast failed - check logs")
+        await client.send_message(
+            chat_id=LOG_CHANNEL,
+            text=f"⚠️ Quote Command Failed: {str(e)[:500]}"
+        )
+
 # =============================
 # COMMAND HANDLER FOR INSTANT ARTICLE
 # =============================
@@ -503,37 +570,6 @@ async def instant_article_handler(client, message: Message):
             text=f"⚠️ Command Failed: {html.escape(str(e)[:1000])}"
         )
 
-# =============================
-# COMMAND HANDLER FOR INSTANT QUOTE
-# =============================
-
-@Client.on_message(filters.command('quote') & filters.user(ADMINS))
-async def instant_quote_handler(client, message: Message):
-    """Handles /quote command from admins to send immediate inspirational quote"""
-    try:
-        processing_msg = await message.reply("✨ Crafting your motivational quote...")
-        
-        # Fetch and send quote
-        quote = fetch_random_quote()
-        await client.send_message(
-            chat_id=QUOTE_CHANNEL,
-            text=quote,
-            parse_mode=enums.ParseMode.MARKDOWN  # Match quote formatting
-        )
-        
-        await processing_msg.edit("✅ Quote successfully published!")
-        await client.send_message(
-            chat_id=LOG_CHANNEL,
-            text=f"🚀 Immediate quote sent by {message.from_user.mention}"
-        )
-
-    except Exception as e:
-        logger.exception("Instant Quote Command Error:")
-        await processing_msg.edit("⚠️ Failed to fetch quote - check logs")
-        await client.send_message(
-            chat_id=LOG_CHANNEL,
-            text=f"⚠️ Quote Command Failed: {html.escape(str(e)[:1000])}"
-        )        
 
 # =============================
 # SCHEDULER START FUNCTIONS
