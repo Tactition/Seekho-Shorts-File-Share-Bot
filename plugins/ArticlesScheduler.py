@@ -40,10 +40,12 @@ logger.setLevel(logging.INFO)
 # DAILY QUOTE AUTO-SENDER FUNCTIONALITY
 # =============================
 
+QUOTE_DELETE_DELAY = 30  # delay in seconds after which the quote message will be deleted
+
 def fetch_random_quote() -> str:
     """
-    Fetches inspirational quotes with fallback from ZenQuotes to FavQs API
-    Maintains consistent formatting across sources
+    Fetches inspirational quotes with fallback from ZenQuotes to FavQs API.
+    Maintains consistent formatting across sources.
     """
     try:
         # First try ZenQuotes API
@@ -89,30 +91,42 @@ def fetch_random_quote() -> str:
                 "Join @Self_Improvement_Audiobooks for daily motivation"
             )
 
+async def delete_message_after(bot: Client, chat_id: int, message_id: int, delay: int):
+    """
+    Waits for a specified delay and then attempts to delete a message.
+    """
+    await asyncio.sleep(delay)
+    try:
+        await bot.delete_messages(chat_id=chat_id, message_ids=message_id)
+        logger.info(f"Deleted message {message_id} in chat {chat_id} after {delay} seconds")
+    except Exception as e:
+        logger.exception(f"Error deleting message {message_id} in chat {chat_id}:")
+
 async def send_daily_quote(bot: Client):
     """
     Sends a daily motivational quote to all users and logs the broadcast details.
+    The quote messages in the users' DMs are automatically deleted after a specified delay.
     """
     while True:
-        # Calculate time until next scheduled sending time (11:00 PM IST)
+        # Calculate time until next scheduled sending time (set here to 19:22 IST, adjust as needed)
         tz = timezone('Asia/Kolkata')
         now = datetime.now(tz)
         target_time = now.replace(hour=19, minute=22, second=0, microsecond=0)
         if now >= target_time:
             target_time += timedelta(days=1)
         sleep_seconds = (target_time - now).total_seconds()
-        logger.info(f"Sleeping for {sleep_seconds} seconds until next 11:00 PM IST quote...")
+        logger.info(f"Sleeping for {sleep_seconds} seconds until next scheduled quote...")
         await asyncio.sleep(sleep_seconds)
 
-        logger.info("11:00 PM IST reached! Sending daily quote...")
+        logger.info("Scheduled time reached! Sending daily quote...")
         try:
             users_cursor = await db.get_all_users()  # Async cursor for users with {'name': {'$exists': True}}
             total_users = await db.col.count_documents({'name': {'$exists': True}})
             quote_message = fetch_random_quote()
 
-            # Send to main quote channel and log channel
+            # Send the quote to the main quote channel and log channel
             await bot.send_message(chat_id=QUOTE_CHANNEL, text=quote_message)
-            await bot.send_message(chat_id=LOG_CHANNEL, text=f"📢 Sending daily quote From Seekho Bot:\n\n{quote_message}")
+            await bot.send_message(chat_id=LOG_CHANNEL, text=f"📢 Sending daily quote from Seekho Bot:\n\n{quote_message}")
 
             sent = blocked = deleted = failed = 0
             done = 0
@@ -123,7 +137,9 @@ async def send_daily_quote(bot: Client):
                     continue  # Skip users with missing details
                 user_id = int(user['id'])
                 try:
-                    await bot.send_message(chat_id=user_id, text=quote_message)
+                    # Send the quote message and then schedule its deletion after QUOTE_DELETE_DELAY seconds
+                    msg = await bot.send_message(chat_id=user_id, text=quote_message)
+                    asyncio.create_task(delete_message_after(bot, user_id, msg.message_id, QUOTE_DELETE_DELAY))
                     sent += 1
                 except FloodWait as e:
                     logger.info(f"Flood wait for {e.value} seconds for user {user_id}")
