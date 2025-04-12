@@ -28,7 +28,7 @@ from plugins.clone import restart_bots
 from Zahid.bot import StreamBot
 from Zahid.utils.keepalive import ping_server  # Your ping script imported here
 from Zahid.bot.clients import initialize_clients
-from plugins.ArticlesScheduler import schedule_daily_quotes, schedule_daily_articles
+from plugins.ArticlesQuotes import schedule_daily_quotes, schedule_daily_articles
 
 
 
@@ -72,8 +72,8 @@ async def start():
     bind_address = "0.0.0.0"
     await web.TCPSite(app, bind_address, PORT).start()
     
-    # Schedule daily quotes
-    schedule_daily_quotes(StreamBot)  # Add this line
+    # Schedule daily quotes and articles
+    schedule_daily_quotes(StreamBot)  
     schedule_daily_articles(StreamBot)
     
     if CLONE_MODE:
