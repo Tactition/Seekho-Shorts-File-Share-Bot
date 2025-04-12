@@ -56,7 +56,7 @@ def fetch_random_quote() -> str:
             f"\"{data['q']}\"\n"
             f"― {data['a']}\n\n"
             "━━━━━━━━━━━━━━━━━━━\n"
-            "Need more motivation? Visit @Excellerators"
+            "Join our @Excellerators Empire And Build Your Mindset"
         )
         logger.info("Successfully fetched from ZenQuotes")
         return quote
@@ -86,7 +86,7 @@ def fetch_random_quote() -> str:
                 "🌱 **Your Growth Journey**\n\n"
                 "Every small step moves you forward. Keep going!\n\n"
                 "━━━━━━━━━━━━━━━━━━━\n"
-                "Join @Self_Improvement_Audiobooks for daily motivation"
+                "Join our @Excellerators Empire And Build Your Mindset"
             )
 
 async def delete_message_after(bot: Client, chat_id: int, message_id: int, delay: int):
@@ -106,10 +106,10 @@ async def send_daily_quote(bot: Client):
     The quote messages in the users' DMs are automatically deleted after a specified delay.
     """
     while True:
-        # Calculate time until next scheduled sending time (set here to 19:22 IST, adjust as needed)
+        # Calculate time until next scheduled sending time (set here to 10:47 IST, adjust as needed)
         tz = timezone('Asia/Kolkata')
         now = datetime.now(tz)
-        target_time = now.replace(hour=19, minute=22, second=0, microsecond=0)
+        target_time = now.replace(hour=22, minute=47, second=0, microsecond=0)
         if now >= target_time:
             target_time += timedelta(days=1)
         sleep_seconds = (target_time - now).total_seconds()
@@ -343,7 +343,7 @@ def paraphrase_content(text: str, bot: Client) -> tuple:
             )
         )
 
-        groq_api_key = os.getenv("groq_api_key","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")
+        groq_api_key = os.getenv("groq_api_key","")
         if not groq_api_key:
             raise ValueError("Groq API key not found in environment variables")
         
@@ -479,7 +479,7 @@ async def send_daily_article(bot: Client):
     while True:
         try:
             now = datetime.now(tz)
-            target_time = now.replace(hour=19, minute=24, second=20, microsecond=0)
+            target_time = now.replace(hour=20, minute=45, second=20, microsecond=0)
             if now >= target_time:
                 target_time += timedelta(days=1)
             wait_seconds = (target_time - now).total_seconds()
@@ -500,7 +500,7 @@ async def send_daily_article(bot: Client):
             
             message = build_structured_message(generated_title, paraphrased_text)
             await bot.send_message(
-                chat_id=QUOTE_CHANNEL,
+                chat_id=ARTICLE_CHANNEL,
                 text=message,
                 parse_mode=enums.ParseMode.HTML,
                 disable_web_page_preview=True
@@ -633,7 +633,7 @@ async def instant_article_handler(client, message: Message):
         message_text = build_structured_message(generated_title, paraphrased_text)
         
         await client.send_message(
-            chat_id=QUOTE_CHANNEL,
+            chat_id=ARTICLE_CHANNEL,
             text=message_text,
             parse_mode=enums.ParseMode.HTML,
             disable_web_page_preview=True
