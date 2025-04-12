@@ -42,33 +42,32 @@ logger.setLevel(logging.INFO)
 
 def fetch_random_quote() -> str:
     """
-    Fetches a motivational quote from the favqs API and formats it.
+    Fetches a simple inspirational quote from ZenQuotes API and formats it
     """
     try:
-        response = requests.get("https://favqs.com/api/qotd", timeout=10)
+        # Using ZenQuotes API for simpler quotes
+        response = requests.get("https://zenquotes.io/api/random", timeout=10)
         response.raise_for_status()
-        data = response.json()
-        quote_data = data.get("quote", {})
-        content = quote_data.get("body", "Stay inspired!")
-        author = quote_data.get("author", "Unknown")
+        data = response.json()[0]
+        
         quote = (
-            "🔥 <b>Fuel for Your Evening to Conquer Tomorrow</b>\n\n"
-            f"<i><b>\"{content}\"</b></i>\n"
-            f"— <b>{author}</b>\n\n"
+            "🔥**Fuel for Your Evening to Conquer Tomorrow**\n\n"
+            f"\"{data['q']}\"\n"
+            f"― {data['a']}\n\n"
             "━━━━━━━━━━━━━━━━━━━\n"
-            "🎧 <b>Explore our Empire Here:</b> @Excellerators"
+            "Need more motivation? Visit @Excellerators"
         )
-
-        logger.info(f"Fetched Quote: {quote}")
+        
+        logger.info(f"Fetched simple quote: {quote}")
         return quote
+        
     except Exception as e:
-        logger.exception("Error fetching quote:")
+        logger.error(f"Quote error: {e}", exc_info=True)
         return (
-            "💖 A Little Love And Fuel for Your Soul \n\n"
-            "Stay inspired - You Will Get Everything!\n\n\n"
+            "🌱 Your Growth Matters \n\n"
+            "Every small step counts! Keep pushing forward.\n\n"
             "━━━━━━━━━━━━━━━━━━━\n"
-            "Need a lift? We’ve got your back → Build your mindset And Make today count. "
-            "Listen in @Self_Improvement_Audiobooks"
+            "Join @Self_Improvement_Audiobooks for daily motivation"
         )
 
 async def send_daily_quote(bot: Client):
@@ -79,7 +78,7 @@ async def send_daily_quote(bot: Client):
         # Calculate time until next scheduled sending time (11:00 PM IST)
         tz = timezone('Asia/Kolkata')
         now = datetime.now(tz)
-        target_time = now.replace(hour=23, minute=0, second=0, microsecond=0)
+        target_time = now.replace(hour=16, minute=36, second=0, microsecond=0)
         if now >= target_time:
             target_time += timedelta(days=1)
         sleep_seconds = (target_time - now).total_seconds()
@@ -94,7 +93,7 @@ async def send_daily_quote(bot: Client):
 
             # Send to main quote channel and log channel
             await bot.send_message(chat_id=QUOTE_CHANNEL, text=quote_message)
-            await bot.send_message(chat_id=LOG_CHANNEL, text=f"📢 Sending daily quote:\n\n{quote_message}")
+            await bot.send_message(chat_id=LOG_CHANNEL, text=f"📢 Sending daily quote From Seekho Bot:\n\n{quote_message}")
 
             sent = blocked = deleted = failed = 0
             done = 0
