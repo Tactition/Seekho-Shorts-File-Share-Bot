@@ -272,10 +272,10 @@ def paraphrase_content(text: str, bot: Client) -> tuple:
             "<b>[Emoji] Title Text</b> (Max 7 words)\n"
             "   Example: <b>🔥 Igniting the Spark: Unleash Greatness in Everyone</b>\n\n"
             
-            "<blockquote><i>[Philosopher Quote]</i> — <b>[Philosopher Name]</b></blockquote>\n"
+            "<blockquote><i>[Philosopher Quote]</i> — <b>[Philosopher Name]</b></blockquote>\n\n"
             "(Select quotes from Aristotle, Nietzsche, Plato, Socrates or other philosophers)\n\n"
             
-            "Core Content (2-3 paragraphs, 5-6 lines each in motivational, inspirational, and persuasive manner):\n"
+            "Core Content (2-3 paragraphs, 4-5 lines each in motivational, inspirational, and persuasive manner):\n"
             "   - First paragraph: State core philosophy\n"
             "   - Second paragraph: Ask rhetorical question\n"
             "   - Third paragraph: Include real-world example\n\n"
@@ -285,21 +285,21 @@ def paraphrase_content(text: str, bot: Client) -> tuple:
             "   🔹 <b>Principle 2</b>: Concise implementation\n"
             "   🔹 <b>Principle 3</b>: Concise implementation\n\n"
             
-            "Actionable Insights:\n"
+            "<u>Actionable Insights:</u>\n"
             "   🌟 <b>Insight 1:</b> Specific action\n"
             "   🌟 <b>Insight 2:</b> Specific action\n"
             "   🌟 <b>Insight 3:</b> Specific action\n\n"
             
             "Closing Format:\n"
-            "   💡 <i>Remember:</i> [Motivational closing statement]\n"
+            "✨ [Motivational closing statement]\n"
             "[3 relevant hashtags]\n"
             
             "Formatting Rules:\n"
-            "- Use ONLY these HTML tags: <b>, <i>, <blockquote>\n"
+            "- Use ONLY these HTML tags: <b>, <i>, <u>, <blockquote>\n"
             "- Maintain 1400-1700 character limit\n"
             "- 🔹 for principles / 🌟 for insights\n"
             "- No markdown, only <b>, <i>, <blockquote> tags\n"
-            "- 1 emoji in title, none elsewhere\n"
+            "- 1 emoji in title (🔥/🌟/✨/📚) \n"
             "- Conversational yet authoritative tone\n"
             "- Include 1 rhetorical question\n"
             "- Use Oxford commas and semicolons\n"
@@ -371,8 +371,8 @@ def build_structured_message(title: str, paraphrased: str) -> str:
     final_title = html.escape(title) if title else "📚 Article Update"
     message = (
         f"<b>{final_title}</b>\n\n"
-        f"{paraphrased}\n\n"
-        "━━━━━━━━━━━━━━━━━━━━━━━━\n"
+        f"{paraphrased}\n"
+        "━━━━━━━━━━━━━━━━━━━━━━\n"
         "💡 <i>Remember:</i> Success is built on continuous improvement, and the fact that you're reading this article shows that dedication sets you apart. \n"
         "Explore @Excellerators for more Wisdom and Divine Knowledge."
     )
@@ -386,7 +386,7 @@ async def send_daily_article(bot: Client):
     while True:
         try:
             now = datetime.now(tz)
-            target_time = now.replace(hour=14, minute=5, second=20, microsecond=0)
+            target_time = now.replace(hour=16, minute=32, second=20, microsecond=0)
             if now >= target_time:
                 target_time += timedelta(days=1)
             wait_seconds = (target_time - now).total_seconds()
