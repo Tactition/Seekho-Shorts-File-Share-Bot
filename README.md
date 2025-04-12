@@ -31,6 +31,8 @@
 - **📊 Private Message Logging and Replying** 
 - **📡 Daily Quote Broadcast at 7pm**
 - **Daily Articles Send to Public Channel Uses the grok Ai**
+- **downlaods the seekho Shorts by Link**
+- 
 
 
 [**Watch Deployment Tutorial**](https://youtu.be/VxAn9VcYtQg)
@@ -53,11 +55,14 @@
 | `LOG_CHANNEL` | Log channel ID starting with -100xxxxxx | - |
 | `BIN_CHANNEL` | Bin channel ID starting with -100xxxxxx | - |
 | `FILE_STORE_CHANNEL` | File Store Channel ID starting with -100xxxxxx | - |
+| `quotes chhannel ` | File Store Channel ID starting with -100xxxxxx | - |
+| `articles chhannel ` | File Store Channel ID starting with -100xxxxxx | - |
 | `FQDN` | Your Server App Link (without https://) | - |
 | `AUTO_DELETE` | Time in Minutes | - |
 | `AUTO_DELETE_TIME` | Time in Seconds | - |
 | `PYTHON_VERSION` | Render-specific, set to `3.10.8` | - |
 | `PORT` | Render-specific, set to `8080` | - |
+
 
 ---
 
@@ -76,7 +81,7 @@
 - `/users` - Count active users
 - `/article` - Generate long-form content
 - `/quote `- Get instant inspiration
-
+- `/download `-to downlaod the video from Seekho
 ### Clone Bot Commands
 
 - `/start` - Check if bot is alive
