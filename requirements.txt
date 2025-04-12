@@ -20,6 +20,7 @@ itsdangerous==2.0.1
 selenium
 
 webdriver-manager>=3.0
+aiofiles
 groq  
 
 
