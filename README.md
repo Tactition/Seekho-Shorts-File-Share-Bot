@@ -27,9 +27,10 @@
 - **🔐 Token Verification** - Security enhancement for user verification
 - **📂 Database Channel Support** - Save content when links are generated
 - **📋 Logging Capabilities** - Track user requests and activities
-- **⏱️ Add Uptime robot Functionality to Ping server automatically without External service
-- **📊 Private Message Logging and Replying
-- **📡 Daily Quote Broadcast at 7pm
+- **⏱️ Add Uptime robot Functionality to Ping server automatically without External service** 
+- **📊 Private Message Logging and Replying** 
+- **📡 Daily Quote Broadcast at 7pm**
+- **Daily Articles Send to Public Channel Uses the grok Ai**
 
 
 [**Watch Deployment Tutorial**](https://youtu.be/VxAn9VcYtQg)
@@ -73,6 +74,8 @@
 - `/broadcast` - Send message to all users (Owner only)
 - `/stats` - Check bot statistics (Owner only)
 - `/users` - Count active users
+- `/article` - Generate long-form content
+- `/quote `- Get instant inspiration
 
 ### Clone Bot Commands
 
