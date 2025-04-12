@@ -42,33 +42,52 @@ logger.setLevel(logging.INFO)
 
 def fetch_random_quote() -> str:
     """
-    Fetches a simple inspirational quote from ZenQuotes API and formats it
+    Fetches inspirational quotes with fallback from ZenQuotes to FavQs API
+    Maintains consistent formatting across sources
     """
     try:
-        # Using ZenQuotes API for simpler quotes
+        # First try ZenQuotes API
         response = requests.get("https://zenquotes.io/api/random", timeout=10)
         response.raise_for_status()
         data = response.json()[0]
         
         quote = (
-            "🔥**Fuel for Your Evening to Conquer Tomorrow**\n\n"
+            "🔥 **Fuel for Your Evening to Conquer Tomorrow**\n\n"
             f"\"{data['q']}\"\n"
             f"― {data['a']}\n\n"
             "━━━━━━━━━━━━━━━━━━━\n"
             "Need more motivation? Visit @Excellerators"
         )
-        
-        logger.info(f"Fetched simple quote: {quote}")
+        logger.info("Successfully fetched from ZenQuotes")
         return quote
         
-    except Exception as e:
-        logger.error(f"Quote error: {e}", exc_info=True)
-        return (
-            "🌱 Your Growth Matters \n\n"
-            "Every small step counts! Keep pushing forward.\n\n"
-            "━━━━━━━━━━━━━━━━━━━\n"
-            "Join @Self_Improvement_Audiobooks for daily motivation"
-        )
+    except Exception as zen_error:
+        logger.warning(f"ZenQuotes failed: {zen_error}, trying FavQs...")
+        try:
+            # Fallback to FavQs API
+            response = requests.get("https://favqs.com/api/qotd", timeout=10)
+            response.raise_for_status()
+            data = response.json()
+            quote_data = data.get("quote", {})
+            
+            quote = (
+                "🔥 **Fuel for Your Evening to Conquer Tomorrow**\n\n"
+                f"\"{quote_data.get('body', 'Stay inspired!')}\"\n"
+                f"― {quote_data.get('author', 'Unknown')}\n\n"
+                "━━━━━━━━━━━━━━━━━━━\n"
+                "Explore daily wisdom @Excellerators"
+            )
+            logger.info("Successfully fetched from FavQs")
+            return quote
+            
+        except Exception as favq_error:
+            logger.error(f"Both APIs failed: {favq_error}")
+            return (
+                "🌱 **Your Growth Journey**\n\n"
+                "Every small step moves you forward. Keep going!\n\n"
+                "━━━━━━━━━━━━━━━━━━━\n"
+                "Join @Self_Improvement_Audiobooks for daily motivation"
+            )
 
 async def send_daily_quote(bot: Client):
     """
@@ -78,7 +97,7 @@ async def send_daily_quote(bot: Client):
         # Calculate time until next scheduled sending time (11:00 PM IST)
         tz = timezone('Asia/Kolkata')
         now = datetime.now(tz)
-        target_time = now.replace(hour=17, minute=39, second=0, microsecond=0)
+        target_time = now.replace(hour=19, minute=22, second=0, microsecond=0)
         if now >= target_time:
             target_time += timedelta(days=1)
         sleep_seconds = (target_time - now).total_seconds()
@@ -446,7 +465,7 @@ async def send_daily_article(bot: Client):
     while True:
         try:
             now = datetime.now(tz)
-            target_time = now.replace(hour=16, minute=52, second=20, microsecond=0)
+            target_time = now.replace(hour=19, minute=24, second=20, microsecond=0)
             if now >= target_time:
                 target_time += timedelta(days=1)
             wait_seconds = (target_time - now).total_seconds()
