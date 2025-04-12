@@ -177,38 +177,6 @@ async def save_sent_posts(sent_post_ids: list):
     async with aiofiles.open(SENT_POSTS_FILE, mode="w") as f:
         await f.write(json.dumps(sent_post_ids[-MAX_POSTS_TO_FETCH:]))
 
-# async def get_random_unseen_post() -> dict:
-#     """
-#     Fetch a random post that has not been sent before from the WordPress API.
-#     """
-#     sent_post_ids = await load_sent_posts()
-#     try:
-#         response = requests.get(
-#             "https://www.franksonnenbergonline.com/wp-json/wp/v2/posts",
-#             params={
-#                 "per_page": MAX_POSTS_TO_FETCH,
-#                 "orderby": "date",
-#                 "order": "desc"
-#             },
-#             timeout=15
-#         )
-#         response.raise_for_status()
-#         posts = response.json()
-
-#         unseen_posts = [p for p in posts if p['id'] not in sent_post_ids]
-#         if not unseen_posts:
-#             sent_post_ids.clear()
-#             unseen_posts = posts
-
-#         selected_post = random.choice(unseen_posts)
-#         sent_post_ids.append(selected_post['id'])
-#         await save_sent_posts(sent_post_ids)
-
-#         return selected_post
-
-#     except Exception as e:
-#         logger.exception("Error fetching posts:")
-#         return None
 
 async def get_random_unseen_post(page: int = 1) -> dict:
     """
@@ -216,6 +184,7 @@ async def get_random_unseen_post(page: int = 1) -> dict:
     The function uses the 'page' parameter along with 'per_page', 'order', and 'orderby'
     to ensure unique content is fetched. If no unseen posts are found on the current page,
     it recursively checks the next page, and if all pages are exhausted, it resets the sent posts list.
+    Additionally, it logs the full URL used to fetch the posts in the Koyeb console.
     """
     sent_post_ids = await load_sent_posts()
     try:
@@ -231,6 +200,10 @@ async def get_random_unseen_post(page: int = 1) -> dict:
             timeout=15
         )
         response.raise_for_status()
+
+        # Log the complete URL used for fetching posts (for debugging in Koyeb console)
+        logger.info(f"Fetching posts from URL: {response.url}")
+
         posts = response.json()
 
         # If no posts are returned on this page, reset to the first page
@@ -327,7 +300,7 @@ def paraphrase_content(text: str, bot: Client) -> tuple:
             "<blockquote><i>[Philosopher Quote]</i> — <b>[Philosopher Name]</b></blockquote>\n"
             "(Select quotes from Aristotle, Nietzsche, Plato, Socrates or other philosophers)\n\n"
             
-            "Core Content (2-3 paragraphs, 2-4 lines each in motivational, inspirational, and persuasive manner):\n"
+            "Core Content (2-3 paragraphs, 1-2 lines each in motivational, inspirational, and persuasive manner):\n"
             "   - First paragraph: State core philosophy\n"
             "   - Second paragraph: Ask rhetorical question\n"
             "   - Third paragraph: Include real-world example\n\n"
@@ -424,7 +397,7 @@ def build_structured_message(title: str, paraphrased: str) -> str:
     message = (
         f"<b>{final_title}</b>\n\n"
         f"{paraphrased}\n"
-        "━━━━━━━━━━━━━━━━━━━━━━\n"
+        "━━━━━━━━━━━━━━━━━━━━\n"
         "💡 <i>Remember:</i> Success is built on continuous improvement, and the fact that you're reading this article shows that dedication sets you apart. \n"
         "Explore @Excellerators for more Wisdom and Divine Knowledge."
     )
