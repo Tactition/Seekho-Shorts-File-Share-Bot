@@ -262,7 +262,7 @@ def paraphrase_content(text: str, bot: Client) -> tuple:
             "Incorporate one quote or little paraphrased idea from renowned figures or Philosphers to support the article based on the context "
             "Encourage self-analysis and leveraging inherent strengths."
             "Format your response so that the first line starts with 'Title:' followed by your generated title, Also the generated title should be unique, attractive, hooky title for the article. then an empty line, and then the article text in multiple paragraphs and then some key insights or acton points from the article in bullet Points prefixed by emojies 🌟 to Sum up the article "
-            "Remember the key insights or acton points heading must be bolded with Html <b> tag and then an empty Line and you will not give any Feedback releated to generated respose "
+            "Remember the key insights or acton points heading must be bolded with Html <b> tag there should be a line break after the bolded heading of key insights or acton points and you will not give any Feedback releated to generated respose "
         )
 
         response = client_groq.chat.completions.create(
