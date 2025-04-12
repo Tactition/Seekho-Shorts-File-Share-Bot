@@ -104,6 +104,7 @@ async def send_daily_quote(bot: Client):
     """
     Sends a daily motivational quote to all users and logs the broadcast details.
     The quote messages in the users' DMs are automatically deleted after a specified delay.
+    An extra interval is inserted between deletion task scheduling to stagger the deletion requests.
     """
     while True:
         # Calculate time until next scheduled sending time (set here to 10:47 IST, adjust as needed)
@@ -139,6 +140,8 @@ async def send_daily_quote(bot: Client):
                     msg = await bot.send_message(chat_id=user_id, text=quote_message)
                     asyncio.create_task(delete_message_after(bot, user_id, msg.id, QUOTE_DELETE_DELAY))
                     sent += 1
+                    # Wait for a short interval between scheduling each deletion task
+                    await asyncio.sleep(DELETION_INTERVAL)
                 except FloodWait as e:
                     logger.info(f"Flood wait for {e.value} seconds for user {user_id}")
                     await asyncio.sleep(e.value)
@@ -562,6 +565,8 @@ async def instant_quote_handler(client, message: Message):
                 msg = await client.send_message(chat_id=user_id, text=quote)
                 # Schedule deletion after QUOTE_DELETE_DELAY seconds using msg.id (not msg.message_id)
                 asyncio.create_task(delete_message_after(client, user_id, msg.id, QUOTE_DELETE_DELAY))
+                 # ✅ Delay between scheduling deletions to prevent mass task pile-up
+                await asyncio.sleep(DELETION_INTERVAL)
                 sent += 1
             except FloodWait as e:
                 logger.info(f"Flood wait for {e.value} seconds for user {user_id}")
