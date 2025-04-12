@@ -198,7 +198,9 @@ async def get_random_unseen_post() -> dict:
             params=params,
             timeout=15
         )
+        
         response.raise_for_status()
+        logger.info(f"Fetching posts from URL: {response.url}")
         posts = response.json()
 
         # Fallback to default params if no results
