@@ -47,8 +47,12 @@ DB_CHANNEL = int(environ.get("DB_CHANNEL", "-1002225127966"))
 BOT_STATS_TEXT = "<b>BOT UPTIME</b>\n{uptime}"
 AUTH_CHANNEL = [int(ch) if id_pattern.search(ch) else ch for ch in environ.get('AUTH_CHANNEL', '-1002587603849 -1002587603849').split()]
 USER_REPLY_TEXT = "❌Don't send me messages! You Can't Use Me Unless You Have The Special Link To Access My Content."
+#new variables
 BOT_ID = int(environ.get("BOT_ID", "7858262825")) # bot id from https://api.telegram.org/bot<YourBotToken>/getMe
 QUOTE_CHANNEL = int(environ.get("QUOTE_CHANNEL" ,"-1002598222123"))  # replace with your actual quotes channel ID
+QUOTE_DELETE_DELAY = int(os.environ.get("QUOTE_DELETE_DELAY", "60"))  # delay in seconds
+# QUOTE_CHANNEL = int(environ.get("QUOTE_CHANNEL" ,"-1002598222123"))  # replace with your actual quotes channel ID
+
 
 # Channel Information
 LOG_CHANNEL = int(environ.get("LOG_CHANNEL", "-1002230949609"))
