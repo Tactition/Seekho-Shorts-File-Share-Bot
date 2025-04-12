@@ -250,7 +250,7 @@ def paraphrase_content(text: str, bot: Client) -> tuple:
             )
         )
 
-        groq_api_key = os.getenv("GROQ_API_KEY")
+        groq_api_key = os.getenv("groq_api_key","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")
         if not groq_api_key:
             raise ValueError("Groq API key not found in environment variables")
         
@@ -343,7 +343,7 @@ async def send_daily_article(bot: Client):
     while True:
         try:
             now = datetime.now(tz)
-            target_time = now.replace(hour=14, minute=8, second=20, microsecond=0)
+            target_time = now.replace(hour=14, minute=14, second=20, microsecond=0)
             if now >= target_time:
                 target_time += timedelta(days=1)
             wait_seconds = (target_time - now).total_seconds()
