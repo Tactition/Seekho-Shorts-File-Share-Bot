@@ -483,7 +483,7 @@ async def send_daily_article(bot: Client):
             if now >= target_time:
                 target_time += timedelta(days=1)
             wait_seconds = (target_time - now).total_seconds()
-            logger.info(f"Next article post in {wait_seconds:.1f} seconds")
+            logger.info(f"Sleeping for {wait_seconds:.1f} seconds until next scheduled Article")
             await asyncio.sleep(wait_seconds)
 
             logger.info("Processing daily article...")
