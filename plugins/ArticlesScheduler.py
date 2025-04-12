@@ -504,6 +504,38 @@ async def instant_article_handler(client, message: Message):
         )
 
 # =============================
+# COMMAND HANDLER FOR INSTANT QUOTE
+# =============================
+
+@Client.on_message(filters.command('quote') & filters.user(ADMINS))
+async def instant_quote_handler(client, message: Message):
+    """Handles /quote command from admins to send immediate inspirational quote"""
+    try:
+        processing_msg = await message.reply("✨ Crafting your motivational quote...")
+        
+        # Fetch and send quote
+        quote = fetch_random_quote()
+        await client.send_message(
+            chat_id=QUOTE_CHANNEL,
+            text=quote,
+            parse_mode=enums.ParseMode.MARKDOWN  # Match quote formatting
+        )
+        
+        await processing_msg.edit("✅ Quote successfully published!")
+        await client.send_message(
+            chat_id=LOG_CHANNEL,
+            text=f"🚀 Immediate quote sent by {message.from_user.mention}"
+        )
+
+    except Exception as e:
+        logger.exception("Instant Quote Command Error:")
+        await processing_msg.edit("⚠️ Failed to fetch quote - check logs")
+        await client.send_message(
+            chat_id=LOG_CHANNEL,
+            text=f"⚠️ Quote Command Failed: {html.escape(str(e)[:1000])}"
+        )        
+
+# =============================
 # SCHEDULER START FUNCTIONS
 # =============================
 
