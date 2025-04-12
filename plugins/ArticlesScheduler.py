@@ -40,8 +40,6 @@ logger.setLevel(logging.INFO)
 # DAILY QUOTE AUTO-SENDER FUNCTIONALITY
 # =============================
 
-QUOTE_DELETE_DELAY = 30  # delay in seconds after which the quote message will be deleted
-
 def fetch_random_quote() -> str:
     """
     Fetches inspirational quotes with fallback from ZenQuotes to FavQs API.
@@ -535,7 +533,7 @@ def schedule_daily_articles(client: Client):
 
 @Client.on_message(filters.command('quote') & filters.user(ADMINS))
 async def instant_quote_handler(client, message: Message):
-    """Handles /quote command to immediately send & broadcast quote"""
+    """Handles /quote command to immediately send & broadcast a quote with auto-deletion after a delay."""
     try:
         processing_msg = await message.reply("✨ Preparing inspirational quote...")
         
@@ -561,7 +559,9 @@ async def instant_quote_handler(client, message: Message):
                 continue
             user_id = int(user['id'])
             try:
-                await client.send_message(chat_id=user_id, text=quote)
+                msg = await client.send_message(chat_id=user_id, text=quote)
+                # Schedule deletion after QUOTE_DELETE_DELAY seconds (ensure delete_message_after is defined)
+                asyncio.create_task(delete_message_after(client, user_id, msg.message_id, QUOTE_DELETE_DELAY))
                 sent += 1
             except FloodWait as e:
                 await asyncio.sleep(e.value)
