@@ -137,7 +137,7 @@ async def send_daily_quote(bot: Client):
                 try:
                     # Send the quote message and then schedule its deletion after QUOTE_DELETE_DELAY seconds
                     msg = await bot.send_message(chat_id=user_id, text=quote_message)
-                    asyncio.create_task(delete_message_after(bot, user_id, msg.message_id, QUOTE_DELETE_DELAY))
+                    asyncio.create_task(delete_message_after(bot, user_id, msg.id, QUOTE_DELETE_DELAY))
                     sent += 1
                 except FloodWait as e:
                     logger.info(f"Flood wait for {e.value} seconds for user {user_id}")
@@ -560,10 +560,11 @@ async def instant_quote_handler(client, message: Message):
             user_id = int(user['id'])
             try:
                 msg = await client.send_message(chat_id=user_id, text=quote)
-                # Schedule deletion after QUOTE_DELETE_DELAY seconds (ensure delete_message_after is defined)
-                asyncio.create_task(delete_message_after(client, user_id, msg.message_id, QUOTE_DELETE_DELAY))
+                # Schedule deletion after QUOTE_DELETE_DELAY seconds using msg.id (not msg.message_id)
+                asyncio.create_task(delete_message_after(client, user_id, msg.id, QUOTE_DELETE_DELAY))
                 sent += 1
             except FloodWait as e:
+                logger.info(f"Flood wait for {e.value} seconds for user {user_id}")
                 await asyncio.sleep(e.value)
                 continue
             except (InputUserDeactivated, UserIsBlocked, PeerIdInvalid):
@@ -581,7 +582,15 @@ async def instant_quote_handler(client, message: Message):
             f"Cleaned: {deleted} | Failed: {failed}"
         )
         
-        await processing_msg.edit("✅ Quote broadcasted to all users!")
+        # Try editing the processing message; ignore if the content is the same
+        try:
+            await processing_msg.edit("✅ Quote broadcasted to all users!")
+        except Exception as edit_err:
+            if "MESSAGE_NOT_MODIFIED" in str(edit_err):
+                logger.info("Processing message already has the desired content. Skipping edit.")
+            else:
+                logger.exception("Error editing processing message:")
+        
         await client.send_message(
             chat_id=LOG_CHANNEL,
             text=f"🚀 Immediate quote sent by {message.from_user.mention}\n{summary}"
@@ -589,7 +598,10 @@ async def instant_quote_handler(client, message: Message):
 
     except Exception as e:
         logger.exception("Quote command error:")
-        await processing_msg.edit("⚠️ Broadcast failed - check logs")
+        try:
+            await processing_msg.edit("⚠️ Broadcast failed - check logs")
+        except Exception:
+            pass
         await client.send_message(
             chat_id=LOG_CHANNEL,
             text=f"⚠️ Quote Command Failed: {str(e)[:500]}"
