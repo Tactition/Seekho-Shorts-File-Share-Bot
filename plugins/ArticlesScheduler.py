@@ -78,7 +78,7 @@ async def send_daily_quote(bot: Client):
         # Calculate time until next scheduled sending time (11:00 PM IST)
         tz = timezone('Asia/Kolkata')
         now = datetime.now(tz)
-        target_time = now.replace(hour=16, minute=36, second=0, microsecond=0)
+        target_time = now.replace(hour=17, minute=39, second=0, microsecond=0)
         if now >= target_time:
             target_time += timedelta(days=1)
         sleep_seconds = (target_time - now).total_seconds()
