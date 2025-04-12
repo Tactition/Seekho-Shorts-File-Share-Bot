@@ -257,13 +257,59 @@ def paraphrase_content(text: str, bot: Client) -> tuple:
         client_groq = Groq(api_key=groq_api_key)
 
         # Construct a clearer prompt with proper spacing and explicit requirements
-        system_prompt = (
+        system_prompt_old = (
             "Rewrite this article in a motivational, inspirational, and persuasive manner the overall output must be between 1400 to 1700 characters "
             "Incorporate one quote or little paraphrased idea from renowned figures or Philosphers to support the article based on the context "
             "Encourage self-analysis and leveraging inherent strengths."
             "Format your response so that the first line starts with 'Title:' followed by your generated title, Also the generated title should be unique, attractive, hooky title for the article. then an empty line, and then the article text in multiple paragraphs and then some key insights or acton points from the article in bullet Points prefixed by emojies 🌟 to Sum up the article "
             "Remember the key insights or acton points heading must be bolded with Html <b> tag there should be a line break after the bolded heading of key insights or acton points and you will not give any Feedback releated to generated respose "
         )
+
+        
+        system_prompt = (
+            "Rephrase the content following this EXACT structure:\n\n"
+            
+            "1. <b>[Emoji] Title Text</b> (Max 7 words)\n"
+            "   Example: <b>🔥 Igniting the Spark: Unleash Greatness in Everyone</b>\n\n"
+            
+            "2. <blockquote><i>[Philosopher Quote]</i> — <b>[Philosopher Name]</b></blockquote>\n"
+            "   (Select quotes from Aristotle, Nietzsche, Plato, or Socrates or other philosphers)\n\n"
+            
+            "3. Core Content (2-3 paragraphs, 5-6 lines each in motivational, inspirational, and persuasive manner):\n"
+            "   - First paragraph: State core philosophy\n"
+            "   - Second paragraph: Ask rhetorical question\n"
+            "   - Third paragraph: Include real-world example\n\n"
+            
+            "4. Key Principles Section:\n"
+            "   <b>[Number] Central Theme:</b>\n"
+            "   🔹 Principle 1: Concise description\n"
+            "   🔹 Principle 2: Concise description\n"
+            "   🔹 Principle 3: Concise description\n\n"
+            
+            "5. Actionable Insights:\n"
+            "   🌟 <b>Insight 1:</b> Specific action\n"
+            "   🌟 <b>Insight 2:</b> Specific action\n"
+            "   🌟 <b>Insight 3:</b> Specific action\n\n"
+            
+            "6. Closing Format:\n"
+            "   <pre>━━━━━━━━━━━━━━━━━━━━━━━━</pre>\n"
+            "   💡 <i>Remember:</i> [Motivational closing statement] @Excellerators\n"
+            "   [3 relevant hashtags]\n\n"
+            
+            "Formatting Rules:\n"
+            "- Use ONLY these HTML tags: <b>, <i>, <blockquote>, <pre>\n"
+            "- Maintain 1400-1700 character limit\n"
+            "- 🔹 for principles / 🌟 for insights\n"
+            "- No markdown, only <b>, <i>, <blockquote>, <pre> tags\n"
+            "- 1 emoji in title, none elsewhere\n"
+            "- Conversational yet authoritative tone\n"
+            "- Include 1 rhetorical question\n"
+            "- Use Oxford commas and semicolons"
+            "- Philosophical foundation in every section"
+
+        )
+
+
 
         response = client_groq.chat.completions.create(
             messages=[
