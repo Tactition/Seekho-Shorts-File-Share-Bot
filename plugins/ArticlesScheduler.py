@@ -188,7 +188,7 @@ async def get_random_unseen_post() -> dict:
             "per_page": MAX_POSTS_TO_FETCH,
             "orderby": random.choice(['date', 'modified', 'title', 'id']),
             "order": random.choice(['asc', 'desc']),
-            "page": random.randint(1, 700),  # Assumes max 5 pages
+            "page": random.randint(1, 7),  # Assumes max 5 pages
             "_": int(time.time())  # Cache busting
         }
         
