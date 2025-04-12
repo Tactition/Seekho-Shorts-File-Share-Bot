@@ -188,7 +188,7 @@ async def get_random_unseen_post() -> dict:
             "per_page": MAX_POSTS_TO_FETCH,
             "orderby": random.choice(['date', 'modified', 'title', 'id']),
             "order": random.choice(['asc', 'desc']),
-            "page": random.randint(1, 5),  # Assumes max 5 pages
+            "page": random.randint(1, 700),  # Assumes max 5 pages
             "_": int(time.time())  # Cache busting
         }
         
@@ -200,7 +200,7 @@ async def get_random_unseen_post() -> dict:
         )
         
         response.raise_for_status()
-        logger.info(f"Fetching posts from URL: {response.url}")
+        logger.info(f"Fetching posts from Radomized param URL each param is diffrent on api call: {response.url}")
         posts = response.json()
 
         # Fallback to default params if no results
@@ -219,6 +219,7 @@ async def get_random_unseen_post() -> dict:
                 timeout=15
             )
             response.raise_for_status()
+            logger.info(f"Fetching posts from default Param not random Params but all Params URL: {response.url}")
             posts = response.json()
 
         # Existing filtering logic
@@ -255,6 +256,7 @@ async def get_random_unseen_post() -> dict:
                 timeout=15
             )
             response.raise_for_status()
+            logger.info(f"Fetching posts from default URL with default Param: {response.url}")
             posts = response.json()
             
             # Existing filtering logic
