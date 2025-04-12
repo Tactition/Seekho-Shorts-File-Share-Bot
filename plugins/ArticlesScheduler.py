@@ -177,28 +177,79 @@ async def save_sent_posts(sent_post_ids: list):
     async with aiofiles.open(SENT_POSTS_FILE, mode="w") as f:
         await f.write(json.dumps(sent_post_ids[-MAX_POSTS_TO_FETCH:]))
 
-async def get_random_unseen_post() -> dict:
+# async def get_random_unseen_post() -> dict:
+#     """
+#     Fetch a random post that has not been sent before from the WordPress API.
+#     """
+#     sent_post_ids = await load_sent_posts()
+#     try:
+#         response = requests.get(
+#             "https://www.franksonnenbergonline.com/wp-json/wp/v2/posts",
+#             params={
+#                 "per_page": MAX_POSTS_TO_FETCH,
+#                 "orderby": "date",
+#                 "order": "desc"
+#             },
+#             timeout=15
+#         )
+#         response.raise_for_status()
+#         posts = response.json()
+
+#         unseen_posts = [p for p in posts if p['id'] not in sent_post_ids]
+#         if not unseen_posts:
+#             sent_post_ids.clear()
+#             unseen_posts = posts
+
+#         selected_post = random.choice(unseen_posts)
+#         sent_post_ids.append(selected_post['id'])
+#         await save_sent_posts(sent_post_ids)
+
+#         return selected_post
+
+#     except Exception as e:
+#         logger.exception("Error fetching posts:")
+#         return None
+
+async def get_random_unseen_post(page: int = 1) -> dict:
     """
-    Fetch a random post that has not been sent before from the WordPress API.
+    Fetch a random post that has not been sent before from the WordPress API using pagination.
+    The function uses the 'page' parameter along with 'per_page', 'order', and 'orderby'
+    to ensure unique content is fetched. If no unseen posts are found on the current page,
+    it recursively checks the next page, and if all pages are exhausted, it resets the sent posts list.
     """
     sent_post_ids = await load_sent_posts()
     try:
+        params = {
+            "per_page": MAX_POSTS_TO_FETCH,
+            "orderby": "date",
+            "order": "desc",
+            "page": page
+        }
         response = requests.get(
             "https://www.franksonnenbergonline.com/wp-json/wp/v2/posts",
-            params={
-                "per_page": MAX_POSTS_TO_FETCH,
-                "orderby": "date",
-                "order": "desc"
-            },
+            params=params,
             timeout=15
         )
         response.raise_for_status()
         posts = response.json()
 
+        # If no posts are returned on this page, reset to the first page
+        if not posts:
+            logger.info(f"No posts returned on page {page}. Resetting to page 1.")
+            return await get_random_unseen_post(page=1)
+
+        # Filter unseen posts
         unseen_posts = [p for p in posts if p['id'] not in sent_post_ids]
         if not unseen_posts:
-            sent_post_ids.clear()
-            unseen_posts = posts
+            # Get total pages from response headers (default to 1 if header missing)
+            total_pages = int(response.headers.get("X-WP-TotalPages", 1))
+            if page < total_pages:
+                logger.info(f"No unseen posts on page {page}. Trying page {page + 1}.")
+                return await get_random_unseen_post(page + 1)
+            else:
+                logger.info("All pages exhausted. Clearing sent posts list.")
+                sent_post_ids.clear()  # Reset if all posts have been seen
+                unseen_posts = posts
 
         selected_post = random.choice(unseen_posts)
         sent_post_ids.append(selected_post['id'])
@@ -209,6 +260,7 @@ async def get_random_unseen_post() -> dict:
     except Exception as e:
         logger.exception("Error fetching posts:")
         return None
+
 
 def clean_content(content: str) -> str:
     """
