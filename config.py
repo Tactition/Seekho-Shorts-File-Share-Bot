@@ -51,8 +51,7 @@ USER_REPLY_TEXT = "❌Don't send me messages! You Can't Use Me Unless You Have T
 BOT_ID = int(environ.get("BOT_ID", "7858262825")) # bot id from https://api.telegram.org/bot<YourBotToken>/getMe
 QUOTE_CHANNEL = int(environ.get("QUOTE_CHANNEL" ,"-1002598222123"))  # replace with your actual quotes channel ID
 QUOTE_DELETE_DELAY = int(os.environ.get("QUOTE_DELETE_DELAY", "60"))  # delay in seconds
-# QUOTE_CHANNEL = int(environ.get("QUOTE_CHANNEL" ,"-1002598222123"))  # replace with your actual quotes channel ID
-
+ARTICLE_CHANNEL = int(environ.get("QUOTE_CHANNEL" ,"-1002583776397"))  # replace with your actual quotes channel ID
 
 # Channel Information
 LOG_CHANNEL = int(environ.get("LOG_CHANNEL", "-1002230949609"))
