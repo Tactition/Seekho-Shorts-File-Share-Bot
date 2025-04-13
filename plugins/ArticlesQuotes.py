@@ -114,7 +114,7 @@ async def send_daily_quote(bot: Client):
         if now >= target_time:
             target_time += timedelta(days=1)
         sleep_seconds = (target_time - now).total_seconds()
-        logger.info(f"Sleeping for {sleep_seconds} seconds until next scheduled quote...")
+        logger.info(f"Sleeping for {wait_seconds:.1f} seconds until next scheduled quote...")
         await asyncio.sleep(sleep_seconds)
 
         logger.info("Scheduled time reached! Sending daily quote...")
