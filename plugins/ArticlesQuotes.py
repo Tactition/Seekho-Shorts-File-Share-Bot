@@ -113,10 +113,24 @@ async def send_daily_quote(bot: Client):
         target_time = now.replace(hour=22, minute=47, second=0, microsecond=0)
         if now >= target_time:
             target_time += timedelta(days=1)
-        sleep_seconds = (target_time - now).total_seconds()
-        logger.info(f"Sleeping for {wait_seconds:.1f} seconds until next scheduled quote...")
-        await asyncio.sleep(sleep_seconds)
+            status_msg = "⏱ Next quote scheduled for tomorrow at 22:47 IST"
+        else:
+            status_msg = f"⏱ Next quote scheduled today at {target_time.strftime('%H:%M:%S')} IST"
+        
+        # Calculate sleep duration with better formatting
+        sleep_duration = (target_time - now).total_seconds()
+        sleep_hours = sleep_duration // 3600
+        sleep_minutes = (sleep_duration % 3600) // 60
+        
+        logger.info(
+            f"{status_msg}\n"
+            f"💤 Sleeping for {sleep_hours:.0f} hours {sleep_minutes:.0f} minutes "
+            f"({sleep_duration:.0f} seconds)"
+        )
+        
+        await asyncio.sleep(sleep_duration)
 
+        # Rest of the original function remains unchanged
         logger.info("Scheduled time reached! Sending daily quote...")
         try:
             users_cursor = await db.get_all_users()  # Async cursor for users with {'name': {'$exists': True}}
@@ -170,7 +184,7 @@ async def send_daily_quote(bot: Client):
                 f"Blocked: {blocked}\n"
                 f"Deleted: {deleted}\n"
                 f"Failed: {failed}\n\n"
-                f"Quote Sent:\n{quote_message}"
+                f"Next quote scheduled: {target_time.strftime('%Y-%m-%d %H:%M:%S %Z')}"
             )
             logger.info(summary)
             await bot.send_message(chat_id=LOG_CHANNEL, text=summary)
