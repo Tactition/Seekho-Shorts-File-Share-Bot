@@ -177,8 +177,7 @@ async def send_daily_quote(bot: Client):
         except Exception as e:
             logger.exception("Error retrieving users from database:")
             await bot.send_message(chat_id=LOG_CHANNEL, text=f"Error retrieving users: {e}")
-        
-        await asyncio.sleep(86400)  # Wait 24 hours until the next run
+
 
 def schedule_daily_quotes(client: Client):
     """
