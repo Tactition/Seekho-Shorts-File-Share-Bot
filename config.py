@@ -50,13 +50,16 @@ USER_REPLY_TEXT = "❌Don't send me messages! You Can't Use Me Unless You Have T
 #new variables
 BOT_ID = int(environ.get("BOT_ID", "7858262825")) # bot id from https://api.telegram.org/bot<YourBotToken>/getMe
 groq_api_key = os.getenv("groq_api_key","")
+
 QUOTE_CHANNEL = int(environ.get("QUOTE_CHANNEL" ,"-1002598222123"))  
 ARTICLE_CHANNEL = int(environ.get("ARTICLE_CHANNEL" ,"-1002583776397"))  
+
 FACTS_CHANNEL = int(environ.get("FACTS_CHANNEL" ,"-1002583776397"))  
-QUIZ_CHANNEL = int(environ.get("QUIZ_CHANNEL" ,"-1002625104089"))  # replace with your actual Trivia channel ID
+QUIZ_CHANNEL = int(environ.get("QUIZ_CHANNEL" ,"-1002684691807"))  # replace with your actual Trivia channel ID
 VOCAB_CHANNEL = int(environ.get("VOCAB_CHANNEL" ,"-1002625104089"))  # replace with your actual Trivia channel ID
-WONDERS_CHANNEL = int(environ.get("WONDERS_CHANNEL" ,"-1002625104089"))  # replace with your actual Trivia channel ID
-AFFIRMATIONS_CHANNEL = int(environ.get("AFFIRMATIONS_CHANNEL" ,"-1002625104089"))  
+
+WONDERS_CHANNEL = int(environ.get("WONDERS_CHANNEL" ,"-1002590262680"))  # replace with your actual Trivia channel ID
+AFFIRMATIONS_CHANNEL = int(environ.get("AFFIRMATIONS_CHANNEL" ,"-1002691360886"))  
 
 # Channel Information
 LOG_CHANNEL = int(environ.get("LOG_CHANNEL", "-1002230949609"))
