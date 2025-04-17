@@ -49,9 +49,9 @@ AUTH_CHANNEL = [int(ch) if id_pattern.search(ch) else ch for ch in environ.get('
 USER_REPLY_TEXT = "❌Don't send me messages! You Can't Use Me Unless You Have The Special Link To Access My Content."
 #new variables
 BOT_ID = int(environ.get("BOT_ID", "7858262825")) # bot id from https://api.telegram.org/bot<YourBotToken>/getMe
-groq_api_key = os.getenv("groq_api_key","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")
+groq_api_key = os.getenv("groq_api_key","")
 QUOTE_CHANNEL = int(environ.get("QUOTE_CHANNEL" ,"-1002598222123"))  
-QUOTE_DELETE_DELAY = int(os.environ.get("QUOTE_DELETE_DELAY", "14400"))  # delay in seconds
+QUOTE_DELETE_DELAY = int(os.environ.get("QUOTE_DELETE_DELAY", "14400000000"))  # delay in seconds
 DELETION_INTERVAL = float(os.environ.get("DELETION_INTERVAL", "1"))  # seconds between scheduling each deletion task means how many seconds wait should be there to delete the message in bot pm
 ARTICLE_CHANNEL = int(environ.get("ARTICLE_CHANNEL" ,"-1002583776397"))  
 FACTS_CHANNEL = int(environ.get("FACTS_CHANNEL" ,"-1002583776397"))  

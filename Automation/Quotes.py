@@ -40,6 +40,40 @@ logger.setLevel(logging.INFO)
 # DAILY QUOTE AUTO-SENDER FUNCTIONALITY
 # =============================
 
+# 1️⃣ Define your pool of headers
+HEADERS = [
+    "🌟 Ignite Your Inner Drive Anytime",
+    "✨ A Dash of Motivation for Your Day",
+    "💡 Bright Ideas to Fuel Your Journey",
+    "🚀 Propel Your Ambitions Forward",
+    "🎯 Focus Your Energy, Seize the Moment",
+    "🌅 A Moment of Clarity Wherever You Are",
+    "🔥 Stoke Your Passion for Success",
+    "🌈 A Ray of Positivity Just for You",
+    "💫 Elevate Your Mindset",
+    "🛤️ Chart Your Course to Greatness",
+    "⚡ Energize Your Willpower Today",
+    "🧭 Find Your North Star—Right Now",
+    "🎉 Celebrate Progress, Big or Small",
+    "🧠 A Thought to Empower Your Mind",
+    "🥇 Step Into Your Best Self Today",
+    "🕊️ Inspiration to Lighten Your Path",
+    "🛡️ Arm Yourself with Positive Vibes",
+    "🌻 Cultivate Growth in Every Moment",
+    "💪 Embrace Strength and Keep Going",
+    "🌍 A Universal Boost for Any Hour",
+    "🌠 Embark on a Journey of Insight",
+    "🌱 Nurture Your Thoughts Right Now",
+    "🔭 Expand Your Horizons Instantly",
+    "🌀 Dive into a Wave of Wisdom",
+    "🎈 Lift Your Spirits This Moment",
+    "🕹️ Seize the Controls of Your Drive",
+    "🎆 Spark a Fire of Possibility",
+    "🥂 Toast to Your Next Breakthrough",
+    "📘 Open a Chapter of Inspiration",
+    "🌌 Discover Infinite Potential Within"
+]
+
 def fetch_random_quote() -> str:
     """
     Fetches inspirational quotes with fallback from ZenQuotes to FavQs API.
@@ -50,11 +84,12 @@ def fetch_random_quote() -> str:
         response = requests.get("https://zenquotes.io/api/random", timeout=10)
         response.raise_for_status()
         data = response.json()[0]
-        
+        header = random.choice(HEADERS)
+
         quote = (
-            "🔥 **Fuel for Your Morning to Conquer The Day Ahead**\n\n"
-            f"\"{data['q']}\"\n"
-            f"― {data['a']}\n\n"
+            f"**\"{header}\"**\n\n"
+            f"**\"{data['q']}\"**\n"
+            f"― *{data['a']}*\n\n"
             "━━━━━━━━━━━━━━━━━━━\n"
             "Explore our @Excellerators Empire And Build Your Mindset"
         )
@@ -102,8 +137,7 @@ async def delete_message_after(bot: Client, chat_id: int, message_id: int, delay
 
 async def send_daily_quote(bot: Client):
     """
-    Sends a daily motivational quote to all users and logs the broadcast details.
-    The quote messages in the users' DMs are automatically deleted after a specified delay.
+    Sends a daily motivational quote to the main quote channel and logs the details.
     """
     while True:
         # Calculate time until next scheduled sending time (set here to 10:47 IST, adjust as needed)
@@ -112,9 +146,9 @@ async def send_daily_quote(bot: Client):
         target_time = now.replace(hour=7, minute=14, second=0, microsecond=0)
         if now >= target_time:
             target_time += timedelta(days=1)
-            status_msg = "⏱ Next quote scheduled for tomorrow at 22:47 IST"
+            status_msg = " Next quote scheduled for tomorrow at 22:47 IST"
         else:
-            status_msg = f"⏱ Next quote scheduled today at {target_time.strftime('%H:%M:%S')} IST"
+            status_msg = f" Next quote scheduled today at {target_time.strftime('%H:%M:%S')} IST"
         
         # Calculate sleep duration with better formatting
         sleep_duration = (target_time - now).total_seconds()
@@ -123,75 +157,21 @@ async def send_daily_quote(bot: Client):
         
         logger.info(
             f"{status_msg}\n"
-            f"💤 Sleeping for {sleep_hours:.0f} hours {sleep_minutes:.0f} minutes "
+            f" Sleeping for {sleep_hours:.0f} hours {sleep_minutes:.0f} minutes "
             f"({sleep_duration:.0f} seconds)"
         )
         
         await asyncio.sleep(sleep_duration)
 
-        # Rest of the original function remains unchanged
+        # Send the quote to the main quote channel and log channel
         logger.info("Scheduled time reached! Sending daily quote...")
         try:
-            users_cursor = await db.get_all_users()  # Async cursor for users with {'name': {'$exists': True}}
-            total_users = await db.col.count_documents({'name': {'$exists': True}})
             quote_message = fetch_random_quote()
-
-            # Send the quote to the main quote channel and log channel
-            await bot.send_message(chat_id=QUOTE_CHANNEL, text=quote_message)
-            await bot.send_message(chat_id=LOG_CHANNEL, text=f"📢 Sending daily quote from Audiobooks Bot:\n\n{quote_message}")
-
-            sent = blocked = deleted = failed = 0
-            done = 0
-            start_time = time.time()
-
-            async for user in users_cursor:
-                if 'id' not in user or 'name' not in user:
-                    continue  # Skip users with missing details
-                user_id = int(user['id'])
-                try:
-                    # Send the quote message and then schedule its deletion after QUOTE_DELETE_DELAY seconds
-                    msg = await bot.send_message(chat_id=user_id, text=quote_message)
-                    asyncio.create_task(delete_message_after(bot, user_id, msg.id, QUOTE_DELETE_DELAY))
-                    sent += 1
-                    # Wait for a short interval between scheduling each deletion task
-                    await asyncio.sleep(DELETION_INTERVAL)
-                except FloodWait as e:
-                    logger.info(f"Flood wait for {e.value} seconds for user {user_id}")
-                    await asyncio.sleep(e.value)
-                    continue
-                except InputUserDeactivated:
-                    await db.delete_user(user_id)
-                    deleted += 1
-                except UserIsBlocked:
-                    await db.delete_user(user_id)
-                    blocked += 1
-                except PeerIdInvalid:
-                    await db.delete_user(user_id)
-                    failed += 1
-                except Exception as e:
-                    failed += 1
-                    logger.exception(f"Error sending to {user_id}:")
-                done += 1
-                if done % 20 == 0:
-                    logger.info(f"Progress: {done}/{total_users} | Sent: {sent} | Blocked: {blocked} | Deleted: {deleted} | Failed: {failed}")
-            
-            broadcast_time = timedelta(seconds=int(time.time() - start_time))
-            summary = (
-                f"✅ Daily Quote Broadcast Completed in {broadcast_time}\n\n"
-                f"Total Users: {total_users}\n"
-                f"Sent: {sent}\n"
-                f"Blocked: {blocked}\n"
-                f"Deleted: {deleted}\n"
-                f"Failed: {failed}\n\n"
-                f"Quote Sent:\n{quote_message}"
-            )
-            logger.info(summary)
-            await bot.send_message(chat_id=LOG_CHANNEL, text=summary)
+            await bot.send_message(chat_id=QUOTE_CHANNEL, text=quote_message, parse_mode=enums.ParseMode.MARKDOWN)
+            await bot.send_message(chat_id=LOG_CHANNEL, text=f" Sending daily quote from Audiobooks Bot:\n\n{quote_message}",parse_mode=enums.ParseMode.MARKDOWN)
         except Exception as e:
-            logger.exception("Error retrieving users from database:")
-            await bot.send_message(chat_id=LOG_CHANNEL, text=f"Error retrieving users: {e}")
-    
-
+            logger.exception("Error sending daily quote:")
+            await bot.send_message(chat_id=LOG_CHANNEL, text=f"Error sending daily quote: {e}")
 
 def schedule_daily_quotes(client: Client):
     """
