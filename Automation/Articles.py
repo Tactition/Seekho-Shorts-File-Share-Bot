@@ -195,7 +195,6 @@ def paraphrase_content(text: str, bot: Client) -> tuple:
             )
         )
 
-        # groq_api_key = os.getenv("groq_api_key","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")
         if not groq_api_key:
             raise ValueError("Groq API key not found in environment variables")
         
