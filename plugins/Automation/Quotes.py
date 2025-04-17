@@ -104,42 +104,81 @@ def fetch_random_quote() -> str:
 
 async def send_daily_quote(bot: Client):
     """
-    Sends a daily motivational quote to the designated channel
+    Sends motivational quotes at multiple times daily with enhanced stability
     """
     tz = timezone('Asia/Kolkata')
+    send_times = [
+        (7, 14),   # 7:14 AM IST
+        (22, 10)    # 10:10 PM IST
+    ]
+
     while True:
-        now = datetime.now(tz)
-        target_time = now.replace(hour=22, minute=47, second=0, microsecond=0)
-        
-        if now >= target_time:
-            target_time += timedelta(days=1)
-            status_msg = "⏱ Next quote scheduled for tomorrow at 22:47 IST"
-        else:
-            status_msg = f"⏱ Next quote scheduled today at {target_time.strftime('%H:%M:%S')} IST"
-        
-        sleep_duration = (target_time - now).total_seconds()
-        logger.info(f"{status_msg}\nSleeping for {sleep_duration//3600:.0f}h {(sleep_duration%3600)//60:.0f}m")
-        
-        await asyncio.sleep(sleep_duration)
+        try:
+            now = datetime.now(tz)
+            
+            # Find next valid send time
+            valid_times = []
+            for hour, minute in send_times:
+                target = now.replace(hour=hour, minute=minute, second=0, microsecond=0)
+                if target > now:
+                    valid_times.append(target)
+            
+            # If no valid times today, use first time tomorrow
+            next_time = min(valid_times) if valid_times else (
+                now.replace(hour=send_times[0][0], minute=send_times[0][1], second=0, microsecond=0) + timedelta(days=1)
+            )
+            
+            sleep_seconds = (next_time - now).total_seconds()
+            logger.info(
+                f"Next quote at {next_time.strftime('%H:%M IST')} | "
+                f"Sleeping {sleep_seconds//3600:.0f}h {(sleep_seconds%3600)//60:.0f}m"
+            )
+            
+            # Use wait_for with timeout to prevent hanging
+            await asyncio.wait_for(asyncio.sleep(sleep_seconds), timeout=sleep_seconds+60)
+
+        except asyncio.TimeoutError:
+            logger.warning("Sleep timer interrupted unexpectedly")
+            continue
+        except asyncio.CancelledError:
+            logger.info("Task cancellation received")
+            return
 
         try:
-            quote_message = fetch_random_quote()
+            # Add timeout for quote fetching
+            quote_message = await asyncio.wait_for(
+                asyncio.to_thread(fetch_random_quote),
+                timeout=20
+            )
+            
+            # Send with flood control
             await bot.send_message(
                 chat_id=QUOTE_CHANNEL,
                 text=quote_message,
                 parse_mode=enums.ParseMode.MARKDOWN
             )
-            await bot.send_message(
-                chat_id=LOG_CHANNEL,
-                text=f"📢 Daily quote sent successfully at {datetime.now(tz).strftime('%H:%M:%S')}"
-            )
             
-        except Exception as e:
-            logger.exception("Error sending daily quote:")
-            await bot.send_message(
-                chat_id=LOG_CHANNEL,
-                text=f"Error sending daily quote: {str(e)[:500]}"
+            # Separate logging with error handling
+            await asyncio.wait_for(
+                bot.send_message(
+                    chat_id=LOG_CHANNEL,
+                    text=f"📢 Quote sent at {datetime.now(tz).strftime('%H:%M:%S')}"
+                ),
+                timeout=10
             )
+
+        except FloodWait as e:
+            logger.warning(f"Flood control: Waiting {e.value} seconds")
+            await asyncio.sleep(e.value + 5)
+            continue
+        except asyncio.TimeoutError:
+            logger.error("Quote sending timed out")
+            await asyncio.sleep(60)
+            continue
+        except Exception as e:
+            logger.exception("Unexpected send error:")
+            await asyncio.sleep(300)  # Backoff period
+            continue
 
 @Client.on_message(filters.command('quote') & filters.user(ADMINS))
 async def instant_quote_handler(client, message: Message):
@@ -170,6 +209,14 @@ async def instant_quote_handler(client, message: Message):
 
 def schedule_daily_quotes(client: Client):
     """
-    Starts the daily quote scheduler
+    Starts the scheduler with thread protection
     """
-    asyncio.create_task(send_daily_quote(client))
+    try:
+        loop = asyncio.get_event_loop()
+        loop.create_task(send_daily_quote(client))
+    except RuntimeError:
+        # Handle cases where new event loop needs creation
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        loop.create_task(send_daily_quote(client))
+        loop.run_forever()
