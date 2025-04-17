@@ -49,10 +49,15 @@ AUTH_CHANNEL = [int(ch) if id_pattern.search(ch) else ch for ch in environ.get('
 USER_REPLY_TEXT = "❌Don't send me messages! You Can't Use Me Unless You Have The Special Link To Access My Content."
 #new variables
 BOT_ID = int(environ.get("BOT_ID", "7858262825")) # bot id from https://api.telegram.org/bot<YourBotToken>/getMe
-QUOTE_CHANNEL = int(environ.get("QUOTE_CHANNEL" ,"-1002598222123"))  # replace with your actual quotes channel ID
+QUOTE_CHANNEL = int(environ.get("QUOTE_CHANNEL" ,"-1002598222123"))  
 QUOTE_DELETE_DELAY = int(os.environ.get("QUOTE_DELETE_DELAY", "14400"))  # delay in seconds
 DELETION_INTERVAL = float(os.environ.get("DELETION_INTERVAL", "1"))  # seconds between scheduling each deletion task means how many seconds wait should be there to delete the message in bot pm
-ARTICLE_CHANNEL = int(environ.get("QUOTE_CHANNEL" ,"-1002583776397"))  # replace with your actual quotes channel ID
+ARTICLE_CHANNEL = int(environ.get("ARTICLE_CHANNEL" ,"-1002583776397"))  
+FACTS_CHANNEL = int(environ.get("FACTS_CHANNEL" ,"-1002583776397"))  
+QUIZ_CHANNEL = int(environ.get("QUIZ_CHANNEL" ,"-1002625104089"))  
+VOCAB_CHANNEL = int(environ.get("VOCAB_CHANNEL" ,"-1002625104089"))  
+WONDERS_CHANNEL = int(environ.get("WONDERS_CHANNEL" ,"-1002625104089"))  
+AFFIRMATIONS_CHANNEL = int(environ.get("AFFIRMATIONS_CHANNEL" ,"-1002625104089"))  
 
 # Channel Information
 LOG_CHANNEL = int(environ.get("LOG_CHANNEL", "-1002230949609"))
