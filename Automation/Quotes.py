@@ -136,43 +136,77 @@ async def delete_message_after(bot: Client, chat_id: int, message_id: int, delay
         logger.exception(f"Error deleting message {message_id} in chat {chat_id}:")
 
 async def send_daily_quote(bot: Client):
-    """
-    Sends a daily motivational quote to the main quote channel and logs the details.
-    """
+    """Sends motivational quotes at multiple times daily with structured error handling"""
+    tz = timezone('Asia/Kolkata')
+    send_times = [
+        (7, 14),   # 7:14 AM IST
+        (12, 0),   # 12:00 PM IST
+        (16, 30),  # 4:30 PM IST
+        (21, 0)    # 9:00 PM IST
+    ]
+
     while True:
-        # Calculate time until next scheduled sending time (set here to 10:47 IST, adjust as needed)
-        tz = timezone('Asia/Kolkata')
         now = datetime.now(tz)
-        target_time = now.replace(hour=7, minute=14, second=0, microsecond=0)
-        if now >= target_time:
-            target_time += timedelta(days=1)
-            status_msg = " Next quote scheduled for tomorrow at 22:47 IST"
-        else:
-            status_msg = f" Next quote scheduled today at {target_time.strftime('%H:%M:%S')} IST"
         
-        # Calculate sleep duration with better formatting
-        sleep_duration = (target_time - now).total_seconds()
-        sleep_hours = sleep_duration // 3600
-        sleep_minutes = (sleep_duration % 3600) // 60
-        
-        logger.info(
-            f"{status_msg}\n"
-            f" Sleeping for {sleep_hours:.0f} hours {sleep_minutes:.0f} minutes "
-            f"({sleep_duration:.0f} seconds)"
+        # Find next valid send time
+        valid_times = []
+        for hour, minute in send_times:
+            target = now.replace(hour=hour, minute=minute, second=0, microsecond=0)
+            if target > now:
+                valid_times.append(target)
+            
+        # If no valid times today, use first time tomorrow
+        next_time = min(valid_times) if valid_times else (
+            now.replace(hour=send_times[0][0], minute=send_times[0][1]) + timedelta(days=1)
         )
         
-        await asyncio.sleep(sleep_duration)
-
-        # Send the quote to the main quote channel and log channel
-        logger.info("Scheduled time reached! Sending daily quote...")
+        sleep_seconds = (next_time - now).total_seconds()
+        logger.info(f"Next quote at {next_time.strftime('%H:%M IST')} | Sleeping {sleep_seconds//3600:.0f}h {(sleep_seconds%3600)//60:.0f}m")
+        
         try:
-            quote_message = fetch_random_quote()
-            await bot.send_message(chat_id=QUOTE_CHANNEL, text=quote_message, parse_mode=enums.ParseMode.MARKDOWN)
-            await bot.send_message(chat_id=LOG_CHANNEL, text=f" Sending daily quote from Audiobooks Bot:\n\n{quote_message}",parse_mode=enums.ParseMode.MARKDOWN)
-        except Exception as e:
-            logger.exception("Error sending daily quote:")
-            await bot.send_message(chat_id=LOG_CHANNEL, text=f"Error sending daily quote: {e}")
+            await asyncio.sleep(sleep_seconds)
+        except asyncio.CancelledError:
+            logger.warning("Sleep interrupted by cancellation")
+            return  # Exit gracefully if task is cancelled
 
+        # Unified error handling block
+        try:
+            # Send quote with retry mechanism
+            max_retries = 3
+            for attempt in range(1, max_retries + 1):
+                try:
+                    quote = fetch_random_quote()
+                    msg = await bot.send_message(
+                        chat_id=QUOTE_CHANNEL, 
+                        text=quote,
+                        parse_mode=enums.ParseMode.MARKDOWN
+                    )
+                    await bot.send_message(
+                        chat_id=LOG_CHANNEL,
+                        text=f"✅ Quote sent at {datetime.now(tz).strftime('%H:%M IST')}\nMessage ID: {msg.id}"
+                    )
+                    break
+                except FloodWait as e:
+                    wait_time = e.value + 5
+                    logger.warning(f"Flood wait: Retrying in {wait_time}s (Attempt {attempt}/{max_retries})")
+                    await asyncio.sleep(wait_time)
+                except Exception as e:
+                    logger.error(f"Attempt {attempt}/{max_retries} failed: {str(e)}")
+                    if attempt == max_retries:
+                        await bot.send_message(
+                            chat_id=LOG_CHANNEL,
+                            text=f"⚠️ Failed after {max_retries} attempts: {str(e)[:500]}"
+                        )
+                    await asyncio.sleep(10)
+
+        except Exception as error:
+            logger.critical(f"Scheduler error: {str(error)}")
+            await bot.send_message(
+                chat_id=LOG_CHANNEL,
+                text=f"🚨 SCHEDULER ERROR: {str(error)[:500]}"
+            )
+            # Wait before continuing to prevent tight loop
+            await asyncio.sleep(300)
 
 @Client.on_message(filters.command('quote') & filters.user(ADMINS))
 async def instant_quote_handler(client, message: Message):
