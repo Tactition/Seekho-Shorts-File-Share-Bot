@@ -30,7 +30,7 @@ from Zahid.utils.keepalive import ping_server  # Your ping script imported here
 from Zahid.bot.clients import initialize_clients
 
 # Set up the bot automation 
-from plugins.Quotes import schedule_daily_quotes
+from Automation.Quotes import schedule_daily_quotes
 
 ppath = "plugins/*.py"
 files = glob.glob(ppath)

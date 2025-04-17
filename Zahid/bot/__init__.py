@@ -7,12 +7,15 @@ class StreamXBot(Client):
 
     def __init__(self):
         super().__init__(
-            name="vjfiletolink",
+            name="ZahidStreamBotSession",
             api_id=API_ID,
             api_hash=API_HASH,
             bot_token=BOT_TOKEN,
             workers=50,
-            plugins={"root": "plugins"},
+            plugins={
+                "root": "plugins",            # your existing commands folder
+                "include": ["Automation"]     # add this line
+            },
             sleep_threshold=5,
         )
     async def iter_messages(
