@@ -496,7 +496,7 @@ async def send_daily_article(bot: Client):
             )
             # Wait before retrying to prevent tight loop
             await asyncio.sleep(300)
-            
+
 
 @Client.on_message(filters.command('article') & filters.user(ADMINS))
 async def instant_article_handler(client, message: Message):
@@ -539,8 +539,6 @@ async def instant_article_handler(client, message: Message):
             chat_id=LOG_CHANNEL,
             text=f"⚠️ Command Failed: {html.escape(str(e)[:1000])}"
         )
-
-
 
 
 def schedule_daily_articles(client: Client):

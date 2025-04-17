@@ -42,7 +42,7 @@ logger = logging.getLogger(__name__)
 SENT_QUIZ_FILE = "sent_Quiz.json"
 MAX_STORED_QUESTIONS = 300
 IST = timezone('Asia/Kolkata')
-QUESTIONS_PER_POST = 4
+QUESTIONS_PER_POST = 3
 
 async def load_sent_Quiz() -> List[str]:
     """Load sent question IDs from file"""
@@ -198,52 +198,76 @@ async def process_questions(bot, questions, sent_ids):
     return new_ids, sent_polls
 
 async def send_scheduled_Quiz(bot: Client):
-    """Main scheduling loop for Quiz polls"""
+    """Main scheduling loop for Quiz polls with enhanced stability"""
     while True:
-        now = datetime.now(IST)
-        target_times = [
-            now.replace(hour=h, minute=0, second=0, microsecond=0)
-            for h in [9, 13, 17, 21]  # 9AM, 1PM, 5PM, 9PM IST
-        ]
-        
-        next_time = min(t for t in target_times if t > now) if any(t > now for t in target_times) \
-            else target_times[0] + timedelta(days=1)
-
-        sleep_duration = (next_time - now).total_seconds()
-        logger.info(f"Next Quiz scheduled for {next_time.astimezone(IST).strftime('%Y-%m-%d %H:%M:%S IST')}")
-        await asyncio.sleep(sleep_duration)
-
         try:
+            now = datetime.now(IST)
+            target_times = [
+                now.replace(hour=h, minute=0, second=0, microsecond=0)
+                for h in [9, 13, 17, 21]  # 9AM, 1PM, 5PM, 9PM IST
+            ]
+            
+            next_time = min(t for t in target_times if t > now) if any(t > now for t in target_times) \
+                else target_times[0] + timedelta(days=1)
+
+            sleep_duration = (next_time - now).total_seconds()
+            logger.info(f"Next Quiz scheduled for {next_time.astimezone(IST).strftime('%Y-%m-%d %H:%M:%S IST')}")
+            
+            try:
+                await asyncio.wait_for(asyncio.sleep(sleep_duration), timeout=sleep_duration + 60)
+            except asyncio.TimeoutError:
+                logger.warning("Sleep timer interrupted unexpectedly")
+                continue
+
             sent_ids = await load_sent_Quiz()
-            questions = fetch_Quiz_questions()
+            questions = None
+            
+            # Retry question fetching up to 3 times
+            for attempt in range(3):
+                try:
+                    questions = fetch_Quiz_questions()
+                    if questions:
+                        break
+                except Exception as e:
+                    logger.warning(f"Question fetch attempt {attempt+1} failed: {e}")
+                    await asyncio.sleep(10)
+            
+            if not questions:
+                logger.error("Failed to fetch questions after 3 attempts")
+                await bot.send_message(LOG_CHANNEL, "❌ Failed to fetch Quiz questions")
+                continue
 
             new_ids, sent_polls = await process_questions(bot, questions, sent_ids)
             
             if new_ids:
                 sent_ids.extend(new_ids)
                 await save_sent_Quiz(sent_ids)
-
-                await bot.send_message(
-                    chat_id=LOG_CHANNEL,
-                    text=(
-                        f"✅ {len(new_ids)} Quiz Polls Sent\n"
-                        f"🕒 {datetime.now(IST).strftime('%Y-%m-%d %H:%M:%S IST')}\n"
-                        f"📝 Sample: {questions[0][0][:50]}...\n"
-                        f"🆔 IDs: {', '.join(qid[:6] for qid in new_ids[:3])}..."
-                    )
+                log_text = (
+                    f"✅ {len(new_ids)} Quiz Polls Sent\n"
+                    f"🕒 {datetime.now(IST).strftime('%Y-%m-%d %H:%M:%S IST')}"
                 )
             else:
-                await bot.send_message(
-                    chat_id=LOG_CHANNEL,
-                    text="❌ Failed to send any Quiz polls"
-                )
+                log_text = "❌ Failed to send any Quiz polls"
 
+            # Retry log sending up to 2 times
+            for attempt in range(2):
+                try:
+                    await bot.send_message(
+                        chat_id=LOG_CHANNEL,
+                        text=log_text
+                    )
+                    break
+                except Exception as e:
+                    logger.warning(f"Log send attempt {attempt+1} failed: {e}")
+                    await asyncio.sleep(5)
+
+        except asyncio.CancelledError:
+            logger.info("Quiz task cancelled")
+            return
         except Exception as e:
-            logger.exception("Failed to send scheduled Quiz:")
-            await bot.send_message(
-                chat_id=LOG_CHANNEL,
-                text=f"❌ Scheduled Quiz Failed\nError: {str(e)[:500]}"
-            )
+            logger.exception("Critical error in Quiz scheduler:")
+            await asyncio.sleep(60)  # Prevent tight error loop
+            continue
 
 @Client.on_message(filters.command('Quiz') & filters.user(ADMINS))
 async def manual_Quiz(client: Client, message: Message):
@@ -291,5 +315,18 @@ async def manual_Quiz(client: Client, message: Message):
         )
 
 def quiz_scheduler(client: Client):
-    """Initialize the Quiz scheduler"""
-    client.loop.create_task(send_scheduled_Quiz(client))
+    """Initialize the Quiz scheduler with watchdog"""
+    async def watchdog():
+        while True:
+            try:
+                task = asyncio.create_task(send_scheduled_Quiz(client))
+                await task
+            except Exception as e:
+                logger.critical(f"Quiz scheduler crashed: {e}")
+                await client.send_message(
+                    LOG_CHANNEL,
+                    f"🚨 Quiz scheduler restarted after crash: {str(e)[:500]}"
+                )
+                await asyncio.sleep(30)
+
+    client.loop.create_task(watchdog())
