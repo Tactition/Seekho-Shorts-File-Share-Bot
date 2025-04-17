@@ -35,6 +35,8 @@ from plugins.Automation.Articles import schedule_daily_articles
 from plugins.Automation.Quiz import quiz_scheduler
 from plugins.Automation.Wonders import schedule_wonders
 from plugins.Automation.Affirmation import schedule_daily_affirmations
+from plugins.Automation.Facts import schedule_facts
+
 
 # Collect plugin files from both folders
 folders = ["plugins", "plugins/Automation"]
@@ -85,6 +87,8 @@ async def start():
     quiz_scheduler(StreamBot)
     schedule_wonders(StreamBot)
     schedule_daily_affirmations(StreamBot)
+    schedule_facts(StreamBot)
+
 
     if CLONE_MODE:
         await restart_bots()
