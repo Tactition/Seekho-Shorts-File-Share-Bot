@@ -173,6 +173,54 @@ async def send_daily_quote(bot: Client):
             logger.exception("Error sending daily quote:")
             await bot.send_message(chat_id=LOG_CHANNEL, text=f"Error sending daily quote: {e}")
 
+
+@Client.on_message(filters.command('quote') & filters.user(ADMINS))
+async def instant_quote_handler(client, message: Message):
+    """Handles /quote command to immediately send a quote with auto-deletion after a delay."""
+    try:
+        processing_msg = await message.reply(" Preparing inspirational quote...")
+
+        # Fetch quote
+        quote = fetch_random_quote()
+
+        # Send to quote channel
+        await client.send_message(
+            chat_id=QUOTE_CHANNEL,
+            text=quote,
+            parse_mode=enums.ParseMode.MARKDOWN
+        )
+
+        # Log results
+        summary = (
+            f" Quote sent by {message.from_user.mention}"
+        )
+
+        # Try editing the processing message; ignore if the content is the same
+        try:
+            await processing_msg.edit(" Quote sent!")
+        except Exception as edit_err:
+            if "MESSAGE_NOT_MODIFIED" in str(edit_err):
+                logger.info("Processing message already has the desired content. Skipping edit.")
+            else:
+                logger.exception("Error editing processing message:")
+
+        await client.send_message(
+            chat_id=LOG_CHANNEL,
+            text=f" Quote sent by {message.from_user.mention}\n{summary}"
+        )
+
+    except Exception as e:
+        logger.exception("Quote command error:")
+        try:
+            await processing_msg.edit(" Broadcast failed - check logs")
+        except Exception:
+            pass
+        await client.send_message(
+            chat_id=LOG_CHANNEL,
+            text=f" Quote Command Failed: {str(e)[:500]}"
+        )
+
+
 def schedule_daily_quotes(client: Client):
     """
     Starts the daily quote broadcast scheduler.
