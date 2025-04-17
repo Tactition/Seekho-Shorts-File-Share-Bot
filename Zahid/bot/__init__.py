@@ -12,10 +12,7 @@ class StreamXBot(Client):
             api_hash=API_HASH,
             bot_token=BOT_TOKEN,
             workers=50,
-            plugins={
-                "root": "Automation",            # your existing commands folder
-                "include": ["Automation"]     # add this line
-            },
+            plugins={"root": "Automation"},
             sleep_threshold=5,
         )
     async def iter_messages(
