@@ -30,7 +30,8 @@ from Zahid.utils.keepalive import ping_server  # Your ping script imported here
 from Zahid.bot.clients import initialize_clients
 
 # Set up the bot automation 
-from Automation import *
+from Automation import Quotes, Articles, Facts, Wonders, Affirmations, Quiz, Vocabulary
+from Automation import schedule_daily_quotes, schedule_daily_articles, schedule_daily_facts, schedule_daily_wonders, schedule_daily_affirmations, schedule_daily_vocabulary, schedule_daily_quiz
 
 
 
@@ -74,6 +75,7 @@ async def start():
     bind_address = "0.0.0.0"
     await web.TCPSite(app, bind_address, PORT).start()
     
+    schedule_daily_quotes(StreamBot)
 
     
     if CLONE_MODE == True:
