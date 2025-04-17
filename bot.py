@@ -36,6 +36,7 @@ from plugins.Automation.Quiz import quiz_scheduler
 from plugins.Automation.Wonders import schedule_wonders
 from plugins.Automation.Affirmation import schedule_daily_affirmations
 from plugins.Automation.Facts import schedule_facts
+from plugins.Automation.Vocabulary import schedule_vocabulary
 
 
 # Collect plugin files from both folders
@@ -88,6 +89,7 @@ async def start():
     schedule_wonders(StreamBot)
     schedule_daily_affirmations(StreamBot)
     schedule_facts(StreamBot)
+    schedule_vocabulary(StreamBot)
 
 
     if CLONE_MODE:

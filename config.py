@@ -54,9 +54,9 @@ groq_api_key = os.getenv("groq_api_key","")
 QUOTE_CHANNEL = int(environ.get("QUOTE_CHANNEL" ,"-1002598222123"))  
 ARTICLE_CHANNEL = int(environ.get("ARTICLE_CHANNEL" ,"-1002583776397"))  
 
-FACTS_CHANNEL = int(environ.get("FACTS_CHANNEL" ,"-1002583776397"))  
+FACTS_CHANNEL = int(environ.get("FACTS_CHANNEL" ,"-1002625104089"))  
 QUIZ_CHANNEL = int(environ.get("QUIZ_CHANNEL" ,"-1002684691807"))  # replace with your actual Trivia channel ID
-VOCAB_CHANNEL = int(environ.get("VOCAB_CHANNEL" ,"-1002625104089"))  # replace with your actual Trivia channel ID
+VOCAB_CHANNEL = int(environ.get("VOCAB_CHANNEL" ,"-1002385764308"))  # replace with your actual Trivia channel ID
 
 WONDERS_CHANNEL = int(environ.get("WONDERS_CHANNEL" ,"-1002590262680"))  # replace with your actual Trivia channel ID
 AFFIRMATIONS_CHANNEL = int(environ.get("AFFIRMATIONS_CHANNEL" ,"-1002691360886"))  
