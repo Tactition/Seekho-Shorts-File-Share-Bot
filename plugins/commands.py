@@ -111,7 +111,8 @@ async def start(client, message):
         await message.reply_photo(
             photo=random.choice(PICS),
             caption=script.START_TXT.format(message.from_user.mention, me.mention),
-            reply_markup=reply_markup
+            reply_markup=reply_markup,
+            parse_mode=enums.ParseMode.MARKDOWN
         )
         return
 
@@ -416,7 +417,7 @@ async def cb_handler(client: Client, query: CallbackQuery):
         await query.message.edit_text(
             text=script.START_TXT.format(query.from_user.mention, me2),
             reply_markup=reply_markup,
-            parse_mode=enums.ParseMode.HTML
+            parse_mode=enums.ParseMode.MARKDOWN
         )
     elif query.data == "clone":
         buttons = [[

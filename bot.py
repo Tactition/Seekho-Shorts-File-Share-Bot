@@ -29,6 +29,9 @@ from Zahid.bot import StreamBot
 from Zahid.utils.keepalive import ping_server  # Your ping script imported here
 from Zahid.bot.clients import initialize_clients
 
+# Set up the bot automation 
+from Automation import *
+
 
 
 ppath = "plugins/*.py"
