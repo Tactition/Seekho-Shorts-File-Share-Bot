@@ -142,7 +142,7 @@ async def send_daily_quote(bot: Client):
         (7, 14),   # 7:14 AM IST
         (12, 0),   # 12:00 PM IST
         (16, 30),  # 4:30 PM IST
-        (21, 0)    # 9:00 PM IST
+        (22, 25)    # 9:00 PM IST
     ]
 
     while True:
