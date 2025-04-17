@@ -34,6 +34,10 @@ from Automation.Quotes import schedule_daily_quotes
 
 ppath = "plugins/*.py"
 files = glob.glob(ppath)
+
+apath = "Automation/*.py"
+automation_files = glob.glob(apath)
+
 StreamBot.start()
 loop = asyncio.get_event_loop()
 
@@ -56,6 +60,19 @@ async def start():
             spec.loader.exec_module(load)
             sys.modules["plugins." + plugin_name] = load
             print("Tactition Imported => " + plugin_name)
+
+      # Import automation scripts dynamically
+    for name in automation_files:
+        with open(name) as a:
+            patt = Path(a.name)
+            plugin_name = patt.stem.replace(".py", "")
+            autom_dir = Path(f"Automation/{plugin_name}.py")
+            import_path = "Automation.{}".format(plugin_name)
+            spec = importlib.util.spec_from_file_location(import_path, autom_dir)
+            load = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(load)
+            sys.modules["Automation." + plugin_name] = load
+            print("Tactition Imported => " + plugin_name)        
     
     # Start pinging server to keep the instance alive on all platforms!
     asyncio.create_task(ping_server())
