@@ -20,7 +20,7 @@ import aiohttp
 from config import *
 
 # Configuration
-SCHEDULE_TIMES = ["09:00", "13:00", "18:100"]  # 24-hour format
+SCHEDULE_TIMES = ["09:00", "13:00", "18:10"]  # 24-hour format
 HEARTBEAT_INTERVAL = 43200  # 12 hours in seconds
 MAX_RETRIES = 5
 RETRY_DELAYS = [10, 30, 60, 300, 600]  # Retry delays in seconds
