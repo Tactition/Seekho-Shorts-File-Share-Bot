@@ -26,17 +26,17 @@ import asyncio
 from pyrogram import idle
 from plugins.clone import restart_bots
 from Zahid.bot import StreamBot
-from Zahid.utils.keepalive import ping_server  # Your ping script imported here
+from Zahid.utils.keepalive import ping_server
 from Zahid.bot.clients import initialize_clients
 
 # Set up the bot automation 
 from Automation.Quotes import schedule_daily_quotes
 
-ppath = "plugins/*.py"
-files = glob.glob(ppath)
-
-apath = "Automation/*.py"
-automation_files = glob.glob(apath)
+# Collect plugin files from both folders
+folders = ["plugins", "Automation"]
+all_files = []
+for folder in folders:
+    all_files += glob.glob(f"{folder}/*.py")
 
 StreamBot.start()
 loop = asyncio.get_event_loop()
@@ -47,54 +47,40 @@ async def start():
     bot_info = await StreamBot.get_me()
     StreamBot.username = bot_info.username
     await initialize_clients()
-    
-    # Import plugins dynamically
-    for name in files:
-        with open(name) as a:
-            patt = Path(a.name)
-            plugin_name = patt.stem.replace(".py", "")
-            plugins_dir = Path(f"plugins/{plugin_name}.py")
-            import_path = "plugins.{}".format(plugin_name)
-            spec = importlib.util.spec_from_file_location(import_path, plugins_dir)
-            load = importlib.util.module_from_spec(spec)
-            spec.loader.exec_module(load)
-            sys.modules["plugins." + plugin_name] = load
-            print("Tactition Imported => " + plugin_name)
 
-      # Import automation scripts dynamically
-    for name in automation_files:
+    # Dynamic import for both plugin folders
+    for name in all_files:
         with open(name) as a:
             patt = Path(a.name)
             plugin_name = patt.stem.replace(".py", "")
-            autom_dir = Path(f"Automation/{plugin_name}.py")
-            import_path = "Automation.{}".format(plugin_name)
-            spec = importlib.util.spec_from_file_location(import_path, autom_dir)
+            full_path = Path(name)
+            import_path = full_path.with_suffix("").as_posix().replace("/", ".")
+            spec = importlib.util.spec_from_file_location(import_path, full_path)
             load = importlib.util.module_from_spec(spec)
             spec.loader.exec_module(load)
-            sys.modules["Automation." + plugin_name] = load
-            print("Tactition Imported => " + plugin_name)        
-    
+            sys.modules[import_path] = load
+            print("Tactition Imported =>", plugin_name)
+
     # Start pinging server to keep the instance alive on all platforms!
     asyncio.create_task(ping_server())
-    
+
     me = await StreamBot.get_me()
     tz = pytz.timezone('Asia/Kolkata')
     today = date.today()
     now = datetime.now(tz)
     time = now.strftime("%H:%M:%S %p")
-    
+
     app = web.AppRunner(await web_server())
     await StreamBot.send_message(chat_id=LOG_CHANNEL, text=script.RESTART_TXT.format(today, time))
     await app.setup()
     bind_address = "0.0.0.0"
     await web.TCPSite(app, bind_address, PORT).start()
-    
+
     schedule_daily_quotes(StreamBot)
 
-    
-    if CLONE_MODE == True:
+    if CLONE_MODE:
         await restart_bots()
-    
+
     print("Bot Started Powered By @Tactiton")
     await idle()
 
