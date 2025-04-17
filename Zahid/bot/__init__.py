@@ -13,7 +13,7 @@ class StreamXBot(Client):
             bot_token=BOT_TOKEN,
             workers=50,
             plugins={
-                "root": "plugins",            # your existing commands folder
+                "root": "Automation",            # your existing commands folder
                 "include": ["Automation"]     # add this line
             },
             sleep_threshold=5,
