@@ -184,8 +184,8 @@ async def send_scheduled_vocabulary(bot: Client):
         now = datetime.now(tz)
         target_times = [
             now.replace(hour=7, minute=30, second=0, microsecond=0),  # 11:30 AM IST
-            now.replace(hour=13, minute=30, second=0, microsecond=0)  # 7:30 PM IST
-            now.replace(hour=17, minute=30, second=0, microsecond=0)  # 7:30 PM IST
+            now.replace(hour=13, minute=30, second=0, microsecond=0),  # 7:30 PM IST
+            now.replace(hour=17, minute=30, second=0, microsecond=0),  # 7:30 PM IST
             now.replace(hour=20, minute=30, second=0, microsecond=0)  # 7:30 PM IST
         ]
         
