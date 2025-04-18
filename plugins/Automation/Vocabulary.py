@@ -43,6 +43,28 @@ client = Groq(api_key="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"
 SENT_WORDS_FILE = "sent_words.json"
 MAX_STORED_WORDS = 500
 
+# Helper to fetch live word
+def fetch_daily_vocabulary_word() -> str:
+    """
+    Fetches the 'word' key from the Vocabulary.com preview.json endpoint
+    via the AllOrigins proxy to avoid 403 errors.
+    """
+    # Original API endpoint
+    API_URL = "https://www.vocabulary.com/challenge/preview.json"
+    # AllOrigins “raw” proxy endpoint
+    PROXY_URL = "https://api.allorigins.win/raw"
+    try:
+        # Ask AllOrigins to fetch the real JSON for us
+        resp = requests.get(PROXY_URL, params={"url": API_URL}, timeout=10)
+        resp.raise_for_status()
+
+        data = resp.json()        # now the real JSON payload
+        word = data.get("word")   # extract the word
+        return word or ""
+    except Exception as e:
+        print(f"Error fetching word: {e}")
+        return ""
+
 async def load_sent_words() -> list:
     """Load sent word IDs (or in this case the words themselves) from file"""
     try:
@@ -64,15 +86,15 @@ def fetch_daily_word() -> tuple:
     The unique_word is extracted from the message content to avoid duplicate sending.
     """
     try:
-        response = client.chat.completions.create(
-            messages=[
-                {
-                    "role": "system",
-                    "content": """You are a creative and charismatic English language expert with a knack for inspiring confident, effective communication who specializes in vocabulary and talks like a professional influential Figures. Every day, you generate a fresh, unique vocabulary word that will improve everyday interactions and help people speak more effectively. Generate vocabulary content with this EXACT format:
+        # 1) Get today's word
+        word = fetch_daily_vocabulary_word()
+
+        # 2) Prepare the system prompt, injecting the fetched word
+        system_template = f"""You are a creative and charismatic English language expert with a knack for inspiring confident, effective communication who specializes in vocabulary and talks like a professional influential Figures. you help people to improve everyday interactions and help people speak more effectively. Generate vocabulary for this [word] which people will understand but Remember with this Exact format:
 
 ✨<b><i> Word Of The Day ! </i></b> ✨
 
-<b><i>📚 [Word] </i></b>
+<b><i>📚 '{word}' </i></b>
 ━━━━━━━━━━━━━━━
 <b><i>Meaning :</i></b>[Short definition] 
 
@@ -96,14 +118,20 @@ def fetch_daily_word() -> tuple:
 
 "Formatting Rules:\n"
 "- dont use [] in the content\n"
-
-
 """
-                },
-                {
-                    "role": "user",
-                    "content": "Generate a fresh vocabulary entry in the specified format. Make it contemporary and conversational."
-                }
+        system_prompt = system_template.replace("[Word]", word)
+
+        # 3) Call Groq API
+        response = client.chat.completions.create(
+            messages=[
+            {
+                "role": "system",
+                "content": system_prompt
+            },
+            {
+                "role": "user",
+                "content": f"Generate a fresh vocabulary entry in the specified format. Make it contemporary and conversational. Today's word is '{word}'."
+            }
             ],
             model="llama3-70b-8192",
             temperature=1.3,
@@ -146,8 +174,6 @@ See It In Action! 🎬
 
 Ready to become a vocabulary enthusiast yourself? 😉
 Want more word wonders? ➡️ @Excellerators"""
-        # Use fallback's first line as the word (or a hash fallback with time)
-        unique_word = "Enthusiast"
         return (fallback_message, f"fallback_{time.time()}")  # Even fallback includes a dynamic part to avoid repeats if needed.
 
 async def send_scheduled_vocabulary(bot: Client):
