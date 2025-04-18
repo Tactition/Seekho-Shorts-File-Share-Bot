@@ -403,8 +403,10 @@ async def send_daily_article(bot: Client):
     """
     tz = timezone('Asia/Kolkata')
     send_times = [
-        (8, 0),    # 8:00 AM IST
-        (19, 45)   # 9:45 PM IST
+        (12, 49),    # 8:00 AM IST
+        (1, 2)   # 9:45 PM IST
+        # (8, 0),    # 8:00 AM IST
+        # (19, 45)   # 9:45 PM IST
     ]
 
     while True:
