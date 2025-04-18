@@ -35,11 +35,6 @@ from groq import Groq
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
-
-# =============================
-# DAILY ARTICLE FUNCTIONALITY
-# =============================
-
 SENT_POSTS_FILE = "sent_posts.json"
 MAX_POSTS_TO_FETCH = 100
 
@@ -60,7 +55,6 @@ async def save_sent_posts(sent_post_ids: list):
     """
     async with aiofiles.open(SENT_POSTS_FILE, mode="w") as f:
         await f.write(json.dumps(sent_post_ids[-MAX_POSTS_TO_FETCH:]))
-
 
 async def get_random_unseen_post() -> dict:
     """
@@ -178,7 +172,7 @@ def clean_content(content: str) -> str:
         logger.exception("Error cleaning content:")
         return content
 
-def paraphrase_content(text: str, bot: Client) -> tuple:
+async def paraphrase_content(text: str, bot: Client) -> tuple:  # Changed to async
     """
     Sends the cleaned content to Groq API for paraphrasing and title generation.
     The API response should start with "Title:" followed by the generated title,
@@ -187,14 +181,11 @@ def paraphrase_content(text: str, bot: Client) -> tuple:
     """
     try:
         # Log original content
-        asyncio.create_task(
-            bot.send_message(
-                chat_id=LOG_CHANNEL,
-                text=f"📨 <b>Original Content Sent:</b>\n<pre>{html.escape(text[:3000])}</pre>",
-                parse_mode=enums.ParseMode.HTML
-            )
+        await bot.send_message(  # Changed to await
+            chat_id=LOG_CHANNEL,
+            text=f"📨 <b>Original Content Sent:</b>\n<pre>{html.escape(text[:3000])}</pre>",
+            parse_mode=enums.ParseMode.HTML
         )
-
         if not groq_api_key:
             raise ValueError("Groq API key not found in environment variables")
         
@@ -282,7 +273,7 @@ def paraphrase_content(text: str, bot: Client) -> tuple:
             
             "Goal:\n"
             "Inspire thoughtful reflection, stir emotion, and leave the reader with quiet motivation—like a wise mentor having a meaningful conversation."
-)
+        )
         system_prompt_fourth = (
             "Rephrase the content into a human-like, thoughtful, and motivational message with this structure:\n\n"
             
@@ -324,7 +315,7 @@ def paraphrase_content(text: str, bot: Client) -> tuple:
             "- Use contractions, metaphors, and emotionally intelligent phrasing\n"
             "- One emoji in the title only (💡, 🔥, 🌱, ✨, 📚)\n"
             "- Maintain flow, warmth, and humanity in your tone\n"
-)
+            )
 
 
 
@@ -341,7 +332,8 @@ def paraphrase_content(text: str, bot: Client) -> tuple:
         system_prompt = random.choice(system_prompts)
 
 
-        response = client_groq.chat.completions.create(
+        response = await asyncio.to_thread(
+            client_groq.chat.completions.create,
             messages=[
                 {
                     "role": "system",
@@ -361,12 +353,10 @@ def paraphrase_content(text: str, bot: Client) -> tuple:
         else:
             raise Exception("Empty API response")
 
-        asyncio.create_task(
-            bot.send_message(
-                chat_id=LOG_CHANNEL,
-                text=f"📩 <b>API Response:</b>\n<pre>{html.escape(paraphrased[:3000])}</pre>",
-                parse_mode=enums.ParseMode.HTML
-            )
+        await bot.send_message(  # Changed to await
+            chat_id=LOG_CHANNEL,
+            text=f"📩 <b>API Response:</b>\n<pre>{html.escape(paraphrased[:3000])}</pre>",
+            parse_mode=enums.ParseMode.HTML
         )
 
         # Parse the API response: extract the title and the body
@@ -385,12 +375,10 @@ def paraphrase_content(text: str, bot: Client) -> tuple:
 
     except Exception as e:
         logger.exception("Paraphrase Error:")
-        asyncio.create_task(
-            bot.send_message(
-                chat_id=LOG_CHANNEL,
-                text=f"🔥 <b>Critical Error:</b>\nUsing original text\n<code>{html.escape(str(e)[:1000])}</code>",
-                parse_mode=enums.ParseMode.HTML
-            )
+        await bot.send_message(  # Changed to await
+            chat_id=LOG_CHANNEL,
+            text=f"🔥 <b>Critical Error:</b>\nUsing original text\n<code>{html.escape(str(e)[:1000])}</code>",
+            parse_mode=enums.ParseMode.HTML
         )
         return (None, text)
 
@@ -434,13 +422,8 @@ async def send_daily_article(bot: Client):
             next_time = min(valid_times) if valid_times else (
                 now.replace(hour=send_times[0][0], minute=send_times[0][1]) + timedelta(days=1)
             )
-
             sleep_seconds = (next_time - now).total_seconds()
-            logger.info(
-                f"Next article at {next_time.strftime('%H:%M IST')} | "
-                f"Sleeping {sleep_seconds//3600:.0f}h {(sleep_seconds%3600)//60:.0f}m"
-            )
-
+            logger.info(f"Next article at {next_time.strftime('%H:%M IST')} | Sleeping {sleep_seconds//3600:.0f}h {(sleep_seconds%3600)//60:.0f}m")
             await asyncio.sleep(sleep_seconds)
 
             logger.info("Processing daily article...")
@@ -513,7 +496,7 @@ async def instant_article_handler(client, message: Message):
 
         raw_content = post['content']['rendered']
         cleaned = clean_content(raw_content)
-        generated_title, paraphrased_text = paraphrase_content(cleaned, client)
+        generated_title, paraphrased_text = await paraphrase_content(cleaned, client)  # Added await
         if not generated_title:
             generated_title = html.escape(post['title']['rendered'])
 
