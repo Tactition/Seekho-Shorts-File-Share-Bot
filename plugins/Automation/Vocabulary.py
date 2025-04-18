@@ -94,7 +94,7 @@ def fetch_daily_word() -> tuple:
 
 ✨<b><i> Word Of The Day ! </i></b> ✨
 
-<b><i>📚 '{word}' </i></b>
+<b><i>📚 {word} </i></b>
 ━━━━━━━━━━━━━━━
 <b><i>Meaning :</i></b>[Short definition] 
 
@@ -130,7 +130,7 @@ def fetch_daily_word() -> tuple:
             },
             {
                 "role": "user",
-                "content": f"Generate a fresh vocabulary entry in the specified format. Make it contemporary and conversational. Today's word is '{word}'."
+                "content": f"Generate a fresh vocabulary entry in the specified format. Make it contemporary and conversational. Today's word is {word}."
             }
             ],
             model="llama3-70b-8192",
