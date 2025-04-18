@@ -183,8 +183,10 @@ async def send_scheduled_vocabulary(bot: Client):
     while True:
         now = datetime.now(tz)
         target_times = [
-            now.replace(hour=11, minute=30, second=0, microsecond=0),  # 11:30 AM IST
-            now.replace(hour=19, minute=30, second=0, microsecond=0)  # 7:30 PM IST
+            now.replace(hour=7, minute=30, second=0, microsecond=0),  # 11:30 AM IST
+            now.replace(hour=13, minute=30, second=0, microsecond=0)  # 7:30 PM IST
+            now.replace(hour=17, minute=30, second=0, microsecond=0)  # 7:30 PM IST
+            now.replace(hour=20, minute=30, second=0, microsecond=0)  # 7:30 PM IST
         ]
         
         valid_times = [t for t in target_times if t > now]
@@ -259,5 +261,13 @@ async def instant_vocab_handler(client, message: Message):
         )
 
 def schedule_vocabulary(client: Client):
-    """Starts the vocabulary scheduler"""
-    asyncio.create_task(send_scheduled_vocabulary(client))
+    """Starts the vocabulary scheduler and keeps it alive with retries"""
+    async def run_forever():
+        while True:
+            try:
+                await send_scheduled_vocabulary(client)
+            except Exception as e:
+                logger.exception("Scheduler crashed, restarting in 10 seconds...")
+                await asyncio.sleep(10)  # Wait before retrying
+
+    asyncio.create_task(run_forever())
