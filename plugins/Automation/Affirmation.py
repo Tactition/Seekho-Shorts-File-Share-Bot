@@ -90,15 +90,32 @@ async def fetch_daily_content() -> dict:
                 if attempt < MAX_RETRIES - 1:
                     await asyncio.sleep(RETRY_DELAYS[attempt])
 
-        # Fetch advice with circuit breaker
+        # Fetch advice with enhanced error handling
         for attempt in range(MAX_RETRIES):
             try:
-                async with session.get("https://api.adviceslip.com/advice", timeout=5) as resp:
+                async with session.get(
+                    "https://api.adviceslip.com/advice",
+                    headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"},
+                    timeout=5
+                ) as resp:
+                    # Check content type before parsing
+                    content_type = resp.headers.get('Content-Type', '')
+                    if 'application/json' not in content_type:
+                        logger.warning(f"Unexpected content type: {content_type}")
+                        raise ValueError("Non-JSON response")
+                    
                     if resp.status == 200:
-                        data = await resp.json()
+                        text = await resp.text()
+                        try:
+                            data = json.loads(text)
+                        except json.JSONDecodeError:
+                            logger.error("Failed to parse JSON response")
+                            raise
+                            
                         slip = data.get("slip", {})
-                        content["advice"] = slip.get("advice", content["advice"])
-                    break
+                        if isinstance(slip, dict):
+                            content["advice"] = slip.get("advice", content["advice"])
+                        break
             except Exception as e:
                 logger.error(f"Advice API attempt {attempt+1}/{MAX_RETRIES} failed: {e}")
                 if attempt < MAX_RETRIES - 1:
