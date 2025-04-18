@@ -139,7 +139,7 @@ async def send_scheduled_wonders(bot: Client):
         try:
             now = datetime.now(tz)
             # Single daily post at 9 PM IST
-            target_time = now.replace(hour=21, minute=0, second=0, microsecond=0)
+            target_time = now.replace(hour=14, minute=52, second=0, microsecond=0)
             
             # If target time already passed today, schedule for tomorrow
             if now > target_time:
