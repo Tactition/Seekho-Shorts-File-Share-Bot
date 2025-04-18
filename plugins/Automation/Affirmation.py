@@ -230,7 +230,7 @@ async def manual_daily_handler(client, message: Message):
     try:
         processing_msg = await message.reply("⏳ Fetching daily boost...")
         sent_hashes = await load_sent_hashes()
-        content = fetch_daily_content()
+        content = await fetch_daily_content()
         
         if content["hash"] in sent_hashes:
             await processing_msg.edit("⚠️ Content already sent recently")
