@@ -137,7 +137,7 @@ async def send_daily_message(bot: Client, content: dict):
     for attempt in range(MAX_RETRIES):
         try:
             await bot.send_message(
-                chat_id=WONDERS_CHANNEL,
+                chat_id=AFFIRMATIONS_CHANNEL,
                 text=message,
                 parse_mode=enums.ParseMode.HTML,
                 disable_web_page_preview=True

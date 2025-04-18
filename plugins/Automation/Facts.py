@@ -181,6 +181,41 @@ async def send_scheduled_facts(bot: Client):
                 return
             await asyncio.sleep(min(300, 30 * restart_count))
 
+@Client.on_message(filters.command('facts') & filters.user(ADMINS))
+async def instant_facts_handler(client, message: Message):
+    try:
+        processing_msg = await message.reply("⏳ Fetching unique fact...")
+        sent_ids = await load_sent_facts()
+        fact_message, fact_id = await fetch_daily_fact()
+        
+        # Retry for unique fact
+        retry = 0
+        while fact_id in sent_ids and retry < 5:
+            fact_message, fact_id = fetch_daily_fact()
+            retry += 1
+        
+        await client.send_message(
+            chat_id=FACTS_CHANNEL,
+            text=fact_message,
+            disable_web_page_preview=True
+        )
+        sent_ids.append(fact_id)
+        await save_sent_facts(sent_ids)
+        
+        await processing_msg.edit("✅ Unique fact published!")
+        await client.send_message(
+            chat_id=LOG_CHANNEL,
+            text=f"📚 Manual fact sent\nID: {fact_id}"
+        )
+        
+    except Exception as e:
+        await processing_msg.edit(f"❌ Error: {str(e)[:200]}")
+        await client.send_message(
+            chat_id=LOG_CHANNEL,
+            text=f"⚠️ Fact command failed: {str(e)[:500]}"
+        )
+        
+
 def schedule_facts(client: Client):
     """Starts the scheduler with restart protection"""
     async def wrapper():

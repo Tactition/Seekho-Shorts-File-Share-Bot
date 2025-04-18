@@ -204,7 +204,7 @@ async def send_scheduled_Quiz(bot: Client):
             now = datetime.now(IST)
             target_times = [
                 now.replace(hour=h, minute=0, second=0, microsecond=0)
-                for h in [9, 13, 17, 21]  # 9AM, 1PM, 5PM, 9PM IST
+                for h in [9, 13, 21]  # 9AM, 1PM, 9PM IST
             ]
             
             next_time = min(t for t in target_times if t > now) if any(t > now for t in target_times) \
@@ -269,7 +269,7 @@ async def send_scheduled_Quiz(bot: Client):
             await asyncio.sleep(60)  # Prevent tight error loop
             continue
 
-@Client.on_message(filters.command('Quiz') & filters.user(ADMINS))
+@Client.on_message(filters.command('quiz') & filters.user(ADMINS))
 async def manual_Quiz(client: Client, message: Message):
     """Handle manual Quiz command from admins"""
     processing_msg = None

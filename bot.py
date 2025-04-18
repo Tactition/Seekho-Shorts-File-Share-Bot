@@ -83,9 +83,9 @@ async def start():
     bind_address = "0.0.0.0"
     await web.TCPSite(app, bind_address, PORT).start()
 
-    schedule_daily_quotes(StreamBot)
-    schedule_daily_articles(StreamBot)
-    quiz_scheduler(StreamBot)
+    schedule_daily_quotes(StreamBot) #done
+    schedule_daily_articles(StreamBot) #done
+    quiz_scheduler(StreamBot) 
     schedule_wonders(StreamBot)
     schedule_daily_affirmations(StreamBot)
     schedule_facts(StreamBot)
