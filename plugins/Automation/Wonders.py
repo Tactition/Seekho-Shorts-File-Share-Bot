@@ -14,6 +14,7 @@ import hashlib
 
 from pyrogram import Client, filters, enums
 from pyrogram.types import Message
+import io
 
 import aiofiles
 
@@ -93,12 +94,26 @@ async def send_wonder_post(bot: Client, wonder: dict):
 
     try:
         if wonder['image_url'] and url(wonder['image_url']):
-            await bot.send_photo(
-                chat_id=WONDERS_CHANNEL,
-                photo=wonder['image_url'],
-                caption=caption,
-                parse_mode=enums.ParseMode.HTML
-            )
+            # Download image locally to avoid Telegram fetch errors
+            try:
+                resp = requests.get(wonder['image_url'], timeout=10)
+                resp.raise_for_status()
+                img_buf = io.BytesIO(resp.content)
+                img_buf.name = "wonder.jpg"
+                await bot.send_photo(
+                    chat_id=WONDERS_CHANNEL,
+                    photo=img_buf,
+                    caption=caption,
+                    parse_mode=enums.ParseMode.HTML
+                )
+            except Exception as download_err:
+                logger.warning(f"Could not download image, sending text only: {download_err}")
+                await bot.send_message(
+                    chat_id=WONDERS_CHANNEL,
+                    text=caption,
+                    parse_mode=enums.ParseMode.HTML,
+                    disable_web_page_preview=True
+                )
         else:
             await bot.send_message(
                 chat_id=WONDERS_CHANNEL,
@@ -112,6 +127,7 @@ async def send_wonder_post(bot: Client, wonder: dict):
             chat_id=LOG_CHANNEL,
             text=f"⚠️ Failed to send wonder {wonder['id']}: {str(e)[:500]}"
         )
+
 
 async def send_scheduled_wonders(bot: Client):
     """Send scheduled wonders with duplicate prevention and improved error handling"""
