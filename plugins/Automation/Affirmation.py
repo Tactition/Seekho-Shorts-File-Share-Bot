@@ -98,24 +98,21 @@ async def fetch_daily_content() -> dict:
                     headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"},
                     timeout=5
                 ) as resp:
-                    # Check content type before parsing
-                    content_type = resp.headers.get('Content-Type', '')
-                    if 'application/json' not in content_type:
-                        logger.warning(f"Unexpected content type: {content_type}")
+                    # Always read text, then attempt JSON parse
+                    text = await resp.text()
+                    try:
+                        data = json.loads(text)
+                    except json.JSONDecodeError:
+                        content_type = resp.headers.get('Content-Type', '')
+                        logger.warning(f"Unexpected content type: {content_type}, failed to parse JSON")
                         raise ValueError("Non-JSON response")
                     
-                    if resp.status == 200:
-                        text = await resp.text()
-                        try:
-                            data = json.loads(text)
-                        except json.JSONDecodeError:
-                            logger.error("Failed to parse JSON response")
-                            raise
-                            
-                        slip = data.get("slip", {})
-                        if isinstance(slip, dict):
-                            content["advice"] = slip.get("advice", content["advice"])
-                        break
+                    # If we reach here, data is a dict
+                    slip = data.get("slip", {})
+                    if isinstance(slip, dict):
+                        content["advice"] = slip.get("advice", content["advice"])
+                    break
+
             except Exception as e:
                 logger.error(f"Advice API attempt {attempt+1}/{MAX_RETRIES} failed: {e}")
                 if attempt < MAX_RETRIES - 1:
@@ -125,6 +122,7 @@ async def fetch_daily_content() -> dict:
     content_str = f"{content['affirmation']}{content['advice']}"
     content["hash"] = hashlib.md5(content_str.encode()).hexdigest()
     return content
+
 
 async def send_daily_message(bot: Client, content: dict):
     """Send formatted message to channel with enhanced retry logic"""
@@ -226,6 +224,35 @@ async def send_scheduled_daily(bot: Client):
                 text=f"🔥 CRITICAL ERROR: {str(e)[:500]}"
             )
             await asyncio.sleep(300)
+
+@Client.on_message(filters.command('affirm') & filters.user(ADMINS))
+async def manual_daily_handler(client, message: Message):
+    try:
+        processing_msg = await message.reply("⏳ Fetching daily boost...")
+        sent_hashes = await load_sent_hashes()
+        content = fetch_daily_content()
+        
+        if content["hash"] in sent_hashes:
+            await processing_msg.edit("⚠️ Content already sent recently")
+            return
+            
+        await send_daily_message(client, content)
+        sent_hashes.append(content["hash"])
+        await save_sent_hashes(sent_hashes)
+        
+        await processing_msg.edit("✅ Daily boost published!")
+        await client.send_message(
+            chat_id=LOG_CHANNEL,
+            text=f"📬 Manual daily message sent"
+        )
+        
+    except Exception as e:
+        await processing_msg.edit(f"❌ Error: {str(e)[:200]}")
+        await client.send_message(
+            chat_id=LOG_CHANNEL,
+            text=f"⚠️ Daily command failed: {str(e)[:500]}"
+        )
+
 
 def schedule_daily_affirmations(client: Client):
     """Starts the scheduler with process monitoring"""
