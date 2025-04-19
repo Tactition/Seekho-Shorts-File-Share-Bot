@@ -81,6 +81,7 @@ def fetch_wonders(count: int = 1) -> Optional[list]:
         logger.error(f"Wonder API error: {e}")
         return None
 
+
 async def send_wonder_post(bot: Client, wonder: dict):
     """Send wonder to channel with proper formatting"""
     caption = (
@@ -94,20 +95,38 @@ async def send_wonder_post(bot: Client, wonder: dict):
 
     try:
         if wonder['image_url'] and url(wonder['image_url']):
-            # Download image locally to avoid Telegram fetch errors
             try:
-                resp = requests.get(wonder['image_url'], timeout=10)
+                # Download with a proper User-Agent to avoid 403
+                resp = requests.get(
+                    wonder['image_url'],
+                    headers={
+                        "User-Agent": (
+                            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                            "AppleWebKit/537.36 (KHTML, like Gecko) "
+                            "Chrome/120.0.0.0 Safari/537.36"
+                        )
+                    },
+                    timeout=10
+                )
                 resp.raise_for_status()
+                
+                # Buffer in memory
                 img_buf = io.BytesIO(resp.content)
                 img_buf.name = "wonder.jpg"
+                
                 await bot.send_photo(
                     chat_id=WONDERS_CHANNEL,
                     photo=img_buf,
                     caption=caption,
                     parse_mode=enums.ParseMode.HTML
                 )
+                
+                # Explicitly close buffer (optional)
+                img_buf.close()
+                
             except Exception as download_err:
                 logger.warning(f"Could not download image, sending text only: {download_err}")
+                # Fallback to text-only message
                 await bot.send_message(
                     chat_id=WONDERS_CHANNEL,
                     text=caption,
@@ -115,19 +134,20 @@ async def send_wonder_post(bot: Client, wonder: dict):
                     disable_web_page_preview=True
                 )
         else:
+            # No valid image URL
             await bot.send_message(
                 chat_id=WONDERS_CHANNEL,
                 text=caption,
                 parse_mode=enums.ParseMode.HTML,
                 disable_web_page_preview=True
             )
+
     except Exception as e:
         logger.error(f"Failed to send wonder: {e}")
         await bot.send_message(
             chat_id=LOG_CHANNEL,
             text=f"⚠️ Failed to send wonder {wonder['id']}: {str(e)[:500]}"
         )
-
 
 async def send_scheduled_wonders(bot: Client):
     """Send scheduled wonders with duplicate prevention and improved error handling"""
