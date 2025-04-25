@@ -10,6 +10,7 @@ import hashlib
 import requests
 from pytz import timezone
 from validators import url
+from io import BytesIO
 
 from pyrogram import Client, filters, enums
 from pyrogram.types import Message
@@ -69,15 +70,16 @@ async def save_sent_hashes(hashes: list):
             await asyncio.sleep(1)
 
 async def fetch_daily_content() -> dict:
-    """Fetch combined content from both APIs with improved retry logic"""
+    """Fetch combined content from APIs with image"""
     content = {
         "affirmation": "You are capable of amazing things!",
         "advice": "Believe in yourself and your abilities.",
+        "image_data": None,
         "hash": str(time.time())
     }
     
     async with aiohttp.ClientSession() as session:
-        # Fetch affirmation with circuit breaker
+        # Fetch affirmation
         for attempt in range(MAX_RETRIES):
             try:
                 async with session.get("https://www.affirmations.dev/", timeout=5) as resp:
@@ -90,7 +92,7 @@ async def fetch_daily_content() -> dict:
                 if attempt < MAX_RETRIES - 1:
                     await asyncio.sleep(RETRY_DELAYS[attempt])
 
-        # Fetch advice with enhanced error handling
+        # Fetch advice
         for attempt in range(MAX_RETRIES):
             try:
                 async with session.get(
@@ -98,34 +100,39 @@ async def fetch_daily_content() -> dict:
                     headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"},
                     timeout=5
                 ) as resp:
-                    # Always read text, then attempt JSON parse
                     text = await resp.text()
                     try:
                         data = json.loads(text)
+                        slip = data.get("slip", {})
+                        if isinstance(slip, dict):
+                            content["advice"] = slip.get("advice", content["advice"])
                     except json.JSONDecodeError:
-                        content_type = resp.headers.get('Content-Type', '')
-                        logger.warning(f"Unexpected content type: {content_type}, failed to parse JSON")
-                        raise ValueError("Non-JSON response")
-                    
-                    # If we reach here, data is a dict
-                    slip = data.get("slip", {})
-                    if isinstance(slip, dict):
-                        content["advice"] = slip.get("advice", content["advice"])
+                        pass
                     break
-
             except Exception as e:
                 logger.error(f"Advice API attempt {attempt+1}/{MAX_RETRIES} failed: {e}")
                 if attempt < MAX_RETRIES - 1:
                     await asyncio.sleep(RETRY_DELAYS[attempt])
 
-    # Create unique hash
+        # Fetch inspirational image
+        for attempt in range(MAX_RETRIES):
+            try:
+                async with session.get("https://zenquotes.io/api/image", timeout=10) as resp:
+                    if resp.status == 200:
+                        content["image_data"] = await resp.read()
+                    break
+            except Exception as e:
+                logger.error(f"Image API attempt {attempt+1}/{MAX_RETRIES} failed: {e}")
+                if attempt < MAX_RETRIES - 1:
+                    await asyncio.sleep(RETRY_DELAYS[attempt])
+
+    # Create unique hash (text only to maintain original duplicate check)
     content_str = f"{content['affirmation']}{content['advice']}"
     content["hash"] = hashlib.md5(content_str.encode()).hexdigest()
     return content
 
-
 async def send_daily_message(bot: Client, content: dict):
-    """Send formatted message to channel with enhanced retry logic"""
+    """Send formatted message to channel with image"""
     message = (
         "🌅 <b>Top 1% Insights</b> 🌟\n\n"
         f"💖 <i>Affirmation:</i>\n{html.escape(content['affirmation'])}\n\n"
@@ -136,12 +143,24 @@ async def send_daily_message(bot: Client, content: dict):
 
     for attempt in range(MAX_RETRIES):
         try:
-            await bot.send_message(
-                chat_id=AFFIRMATIONS_CHANNEL,
-                text=message,
-                parse_mode=enums.ParseMode.HTML,
-                disable_web_page_preview=True
-            )
+            if content.get("image_data"):
+                # Send as photo with caption
+                photo = BytesIO(content["image_data"])
+                photo.name = "daily_inspiration.jpg"
+                await bot.send_photo(
+                    chat_id=AFFIRMATIONS_CHANNEL,
+                    photo=photo,
+                    caption=message,
+                    parse_mode=enums.ParseMode.HTML
+                )
+            else:
+                # Fallback to text message
+                await bot.send_message(
+                    chat_id=AFFIRMATIONS_CHANNEL,
+                    text=message,
+                    parse_mode=enums.ParseMode.HTML,
+                    disable_web_page_preview=True
+                )
             return True
         except Exception as e:
             logger.error(f"Send attempt {attempt+1}/{MAX_RETRIES} failed: {e}")
@@ -188,7 +207,7 @@ async def send_scheduled_daily(bot: Client):
             
             logger.info(f"Next message scheduled at {target_time.strftime('%Y-%m-%d %H:%M:%S %Z')}")
             
-            # Add heartbeat monitoring
+            # Heartbeat monitoring
             if (datetime.now() - last_heartbeat).total_seconds() > HEARTBEAT_INTERVAL:
                 await bot.send_message(
                     chat_id=LOG_CHANNEL,
@@ -253,7 +272,6 @@ async def manual_daily_handler(client, message: Message):
             text=f"⚠️ Daily command failed: {str(e)[:500]}"
         )
 
-
 def schedule_daily_affirmations(client: Client):
     """Starts the scheduler with process monitoring"""
     async def wrapper():
@@ -261,7 +279,7 @@ def schedule_daily_affirmations(client: Client):
         while True:
             try:
                 await send_scheduled_daily(client)
-                restart_count = 0  # Reset counter on clean exit
+                restart_count = 0
             except Exception as e:
                 restart_count += 1
                 logger.critical(f"Scheduler crashed ({restart_count}): {e}", exc_info=True)
