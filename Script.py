@@ -53,8 +53,6 @@ If You Want To Remove Api Then Copy This And Send To Bot - `/api None`"""
 
 📚 ʟɪʙʀᴀʀʏ: <a href=https://docs.pyrogram.org>𝐏𝐲𝐫𝐨𝐠𝐫𝐚𝐦</a>
 
-🧑🏻‍💻 ᴅᴇᴠᴇʟᴏᴘᴇʀ: <a href=https://t.me/tactition>Tactition</a>
-
 👥 sᴜᴘᴘᴏʀᴛ ɢʀᴏᴜᴘ: <a href=https://t.me/TeamExcellerators>Join Here</a>
 
 📢 Main ᴄʜᴀɴɴᴇʟ: <a href=https://t.me/SeekhoShorts>SeekhoShorts</a></b>
@@ -89,8 +87,6 @@ First Send /clone command then follow below steps.
 
     HELP_TXT = """<b>
     𝐀𝐥𝐡𝐚𝐦𝐝𝐮𝐥𝐢𝐥𝐚𝐡 𝖶𝗈𝗋𝗄𝗂𝗇𝗀 𝗍𝗈 𝖲𝖾𝗋𝗏𝖾 𝖧𝗎𝗆𝖺𝗇𝗂𝗍𝗒 𝗂𝗇 𝖺 𝗐𝗈𝗋𝗅𝖽 𝗐𝗁𝖾𝗋𝖾 𝖭𝗈𝗍𝗁𝗂𝗇𝗀 𝖼𝗈𝗆𝖾𝗌 𝖥𝗋𝖾𝖾, 𝖲𝗈 𝗒𝗈𝗎 𝗐𝗈𝗇’𝗍 𝖻𝖾 𝗁𝖾𝗅𝖽 𝖻𝖺𝖼𝗄 𝗂𝗇 𝖫𝗂𝖿𝖾.
-    
-💢 This is a MultiPurpose Bot Developed By @tactition
 
 🔻 Its Main Purpose is To Provide You With High quality Content Like Course, Audiobooks And other Important Stuff
 
