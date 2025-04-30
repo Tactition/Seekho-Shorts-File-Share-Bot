@@ -59,7 +59,7 @@ async def save_sent_verses(verse_ids: list):
             logger.error(f"Error saving verses (attempt {attempt+1}/3): {e}")
             await asyncio.sleep(1)
 
-async def fetch_quran_verse(verse_number: int) -> Tuple[str, str, str]:
+async def fetch_quran_verse(verse_number: int) -> Tuple[str, str, str, str]:
     """Fetch Quran verse data from API"""
     base_url = "http://api.alquran.cloud/v1/ayah/"
     try:
@@ -137,23 +137,28 @@ async def send_scheduled_verses(bot: Client):
     while True:
         try:
             now = datetime.now(tz)
-            target_times = [
-                datetime.strptime(t, "%H:%M").replace(year=now.year, month=now.month, day=now.day)
-                for t in DAILY_SCHEDULE
-            ]
-            target_times = [t.astimezone(tz) for t in target_times if t > now]
-            
+
+            # Build a list of today’s schedule times, all timezone-aware
+            target_times = []
+            for t_str in DAILY_SCHEDULE:
+                hour, minute = map(int, t_str.split(':'))
+                t_naive = datetime(now.year, now.month, now.day, hour, minute)
+                t_aware = tz.localize(t_naive)
+                if t_aware > now:
+                    target_times.append(t_aware)
+
+            # If none left today, schedule first time tomorrow
             if not target_times:
-                next_time = datetime.strptime(
-                    f"{now.date()+timedelta(days=1)} {DAILY_SCHEDULE[0]}", 
-                    "%Y-%m-%d %H:%M"
-                ).astimezone(tz)
+                hour, minute = map(int, DAILY_SCHEDULE[0].split(':'))
+                next_day = now + timedelta(days=1)
+                next_naive = datetime(next_day.year, next_day.month, next_day.day, hour, minute)
+                next_time = tz.localize(next_naive)
             else:
                 next_time = min(target_times)
-            
+
             sleep_seconds = (next_time - now).total_seconds()
             logger.info(f"Next verse scheduled at {next_time.strftime('%Y-%m-%d %H:%M:%S %Z')}")
-            
+
             # Heartbeat monitoring
             if (datetime.now() - last_heartbeat).total_seconds() > HEARTBEAT_INTERVAL:
                 await bot.send_message(
@@ -165,7 +170,7 @@ async def send_scheduled_verses(bot: Client):
             await asyncio.sleep(max(1, sleep_seconds))
 
             sent_verses = await load_sent_verses()
-            current_verse = 1 if not sent_verses else (sent_verses[-1] % 6236) + 1
+            current_verse = 1 if not sent_verses else (sent_verses[-1] % MAX_STORED_VERSES) + 1
 
             if await send_verse(bot, current_verse):
                 sent_verses.append(current_verse)
@@ -177,7 +182,7 @@ async def send_scheduled_verses(bot: Client):
                 )
 
             restart_count = 0
-            
+
         except asyncio.CancelledError:
             logger.info("Task cancellation requested")
             break
@@ -198,7 +203,7 @@ async def instant_quran_handler(client, message: Message):
     try:
         processing_msg = await message.reply("⏳ Fetching Quran verse...")
         sent_verses = await load_sent_verses()
-        current_verse = 1 if not sent_verses else (sent_verses[-1] % 6236) + 1
+        current_verse = 1 if not sent_verses else (sent_verses[-1] % MAX_STORED_VERSES) + 1
 
         if await send_verse(client, current_verse):
             sent_verses.append(current_verse)
