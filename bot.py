@@ -92,7 +92,7 @@ async def start():
     schedule_daily_affirmations(StreamBot)
     schedule_facts(StreamBot)
     schedule_vocabulary(StreamBot)
-    schedule_quran_verses(StreamBot)
+    start_quran_scheduler(StreamBot)
 
 
     if CLONE_MODE:
