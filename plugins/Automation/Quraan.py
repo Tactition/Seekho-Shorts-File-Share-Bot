@@ -29,7 +29,7 @@ MAX_STORED_VERSES = 6236  # Total number of Quran verses
 MAX_RETRIES = 5
 RETRY_DELAYS = [5, 15, 30, 60, 120]
 HEARTBEAT_INTERVAL = 43200  # 12 hours in seconds
-DAILY_SCHEDULE = ["08:00", "12:55", "20:00"]  # IST times
+DAILY_SCHEDULE = ["08:00", "1:09", "20:00"]  # IST times
 
 async def load_sent_verses() -> list:
     """Load sent verse numbers from file"""
