@@ -17,7 +17,7 @@ from typing import List, Tuple
 import requests
 from pytz import timezone
 from bs4 import BeautifulSoup, Comment
-from validators import domain
+from validators import domain, url
 
 from pyrogram import Client, filters, enums
 from pyrogram.types import Message, PollOption
@@ -34,39 +34,53 @@ from config import *
 # Configure logger
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
-# Add to your existing plugin file (e.g., vocabulary_plugin.py)
-from groq import Groq
-from collections import deque
 
-# Configuration
+# Vocabulary configuration
+from groq import Groq
 client = Groq(api_key="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")
 SENT_WORDS_FILE = "sent_words.json"
 MAX_STORED_WORDS = 500
+WORDNIK_API_KEY = "2n6n3ss5pbrijf3pxm3ia3lb1jt2w96k9i7piqtmdb6w4ta48"
 
-# Helper to fetch live word
+def fetch_pronunciation(word: str) -> str:
+    """Get pronunciation audio URL from Wordnik"""
+    if not word:
+        return ""
+    
+    try:
+        response = requests.get(
+            f"https://api.wordnik.com/v4/word.json/{word}/audio",
+            params={
+                "useCanonical": "false",
+                "limit": 1,
+                "api_key": WORDNIK_API_KEY
+            },
+            timeout=10
+        )
+        if response.status_code == 200:
+            audio_data = response.json()
+            if audio_data and isinstance(audio_data, list):
+                return audio_data[0].get("fileUrl", "")
+    except Exception as e:
+        logger.error(f"Wordnik audio error: {e}")
+    
+    return ""
+
 def fetch_daily_vocabulary_word() -> str:
-    """
-    Fetches the 'word' key from the Vocabulary.com preview.json endpoint
-    via the AllOrigins proxy to avoid 403 errors.
-    """
-    # Original API endpoint
+    """Fetch daily word from Vocabulary.com via proxy"""
     API_URL = "https://www.vocabulary.com/challenge/preview.json"
-    # AllOrigins “raw” proxy endpoint
     PROXY_URL = "https://api.allorigins.win/raw"
     try:
-        # Ask AllOrigins to fetch the real JSON for us
         resp = requests.get(PROXY_URL, params={"url": API_URL}, timeout=10)
         resp.raise_for_status()
-
-        data = resp.json()        # now the real JSON payload
-        word = data.get("word")   # extract the word
-        return word or ""
+        data = resp.json()
+        return data.get("word", "")
     except Exception as e:
-        print(f"Error fetching word: {e}")
+        logger.error(f"Error fetching word: {e}")
         return ""
 
 async def load_sent_words() -> list:
-    """Load sent word IDs (or in this case the words themselves) from file"""
+    """Load sent words from file"""
     try:
         async with aiofiles.open(SENT_WORDS_FILE, "r") as f:
             content = await f.read()
@@ -75,22 +89,17 @@ async def load_sent_words() -> list:
         return []
 
 async def save_sent_words(words: list):
-    """Save sent word IDs (or words themselves) to file"""
+    """Save sent words to file"""
     async with aiofiles.open(SENT_WORDS_FILE, "w") as f:
         await f.write(json.dumps(words[-MAX_STORED_WORDS:]))
 
 def fetch_daily_word() -> tuple:
-    """
-    Fetches random vocabulary word using Groq API.
-    Returns (formatted_word, unique_word)
-    The unique_word is extracted from the message content to avoid duplicate sending.
-    """
+    """Generate vocabulary entry with audio pronunciation"""
     try:
-        # 1) Get today's word
         word = fetch_daily_vocabulary_word()
+        audio_url = fetch_pronunciation(word)
 
-        # 2) Prepare the system prompt, injecting the fetched word
-        system_template = f"""You are a creative and charismatic English language expert with a knack for inspiring confident, effective communication who specializes in vocabulary and talks like a professional influential Figures. you help people to improve everyday interactions and help people speak more effectively. Generate vocabulary for this [word] which people will understand but Remember with this Exact format:
+        system_template = f"""You are a creative English language expert. Generate vocabulary for {word} in this format:
 
 ✨<b><i> Word Of The Day ! </i></b> ✨
 
@@ -99,118 +108,91 @@ def fetch_daily_word() -> tuple:
 <b><i>Meaning :</i></b>[Short definition] 
 
 <b><i>💡 Think: </i></b>
-[Short relatable example/analogy]
+[Relatable example]
 
 <b><i>🎯 Synonyms :</i></b>
-<b>[Word1]:</b> [Brief explanation]
+<b>[Word1]:</b> [Explanation]
 <b>[Word2]:</b> [Different angle]
 <b>[Word3]:</b> [Unique take]
 
 <b><i>📝 Antonyms: </i></b>
-<b>[Word1] :</b> [Contrasting concept]
-<b>[Word2] :</b> [Opposite perspective]
-<b>[Word3] :</b> [Counterpart idea]
+<b>[Word1] :</b> [Contrast]
+<b>[Word2] :</b> [Opposite]
+<b>[Word3] :</b> [Counterpart]
 
 <b><i>See It In Action!🎬</i></b>
-"[Practical example sentence]"
+"[Example sentence]"
 
-<b><i>🧭 Want more wonders? Explore:</i></b> ➡️ @Excellerators
+<b><i>🧭 Explore:</i></b> ➡️ @Excellerators"""
 
-"Formatting Rules:\n"
-"- dont use [] in the content\n"
-"""
-        system_prompt = system_template.replace("[Word]", word)
-
-        # 3) Call Groq API
         response = client.chat.completions.create(
             messages=[
-            {
-                "role": "system",
-                "content": system_prompt
-            },
-            {
-                "role": "user",
-                "content": f"Generate a fresh vocabulary entry in the specified format. Make it contemporary and conversational. Today's word is {word}."
-            }
+                {"role": "system", "content": system_template},
+                {"role": "user", "content": f"Generate fresh entry for {word}"}
             ],
             model="llama3-70b-8192",
             temperature=1.3,
-            max_tokens=400,
-            stream=False
+            max_tokens=400
         )
         
         word_content = response.choices[0].message.content
-        # Extract the vocabulary word from the formatted message.
-        # This regex looks for the text after the "📚" emoji inside the <b><i> tag.
         match = re.search(r"<b><i>📚\s*(.*?)\s*</i></b>", word_content)
-        if match:
-            unique_word = match.group(1)
-        else:
-            # Fallback: use a simple hash if extraction fails
-            unique_word = hashlib.md5(word_content.encode()).hexdigest()
+        unique_word = match.group(1) if match else hashlib.md5(word_content.encode()).hexdigest()
         
-        return (word_content, unique_word)
-        
+        return (word_content, unique_word, audio_url)
+
     except Exception as e:
         logger.error(f"Groq API error: {e}")
-        fallback_message = """✨ Level Up Your Lexicon! ✨
-Enthusiast 
-(Meaning): Someone who's absolutely fired up and deeply passionate about a specific hobby, interest, or subject! 🔥
-
-Think: That friend who lives and breathes video games? The person who can talk about their favorite band for hours? Yep, they're enthusiasts!
-
-Synonyms :
-Fanatic: Going beyond just liking something! Think super dedicated.
-Devotee: Heart and soul invested! Shows a deep commitment.
-Aficionado: Not just a fan, but a knowledgeable one! Knows the ins and outs.
-
-Word Opposites (Flip the Script! 🔄):
-Skeptic: Hmm, I'm not so sure... Questions everything! 🤔
-Critic: Always finding something to pick apart. 🤨
-Indifferent: Meh. Doesn't care either way. 😴
-
-See It In Action! 🎬
-"The release of the new sci-fi series drew in a massive crowd of enthusiasts, eager to explore its intricate world and compelling characters." 🚀🌌
-
-Ready to become a vocabulary enthusiast yourself? 😉
-Want more word wonders? ➡️ @Excellerators"""
-        return (fallback_message, f"fallback_{time.time()}")  # Even fallback includes a dynamic part to avoid repeats if needed.
+        fallback = """✨ Level Up Your Lexicon! ✨
+Enthusiast (Meaning): Passionate about specific interests! 🔥
+Synonyms: Fanatic, Devotee, Aficionado
+Antonyms: Skeptic, Critic, Indifferent
+Example: "Sci-fi enthusiasts eagerly awaited the new series." 🚀
+Explore more @Excellerators"""
+        return (fallback, f"fallback_{time.time()}", "")
 
 async def send_scheduled_vocabulary(bot: Client):
-    """Send scheduled vocabulary words with duplicate prevention"""
+    """Send scheduled vocabulary with audio"""
     tz = timezone('Asia/Kolkata')
     
     while True:
         now = datetime.now(tz)
         target_times = [
-            now.replace(hour=7, minute=30, second=0, microsecond=0),  # 7:30 AM IST
-            now.replace(hour=13, minute=30, second=0, microsecond=0),  # 1:30 PM IST
-            now.replace(hour=17, minute=30, second=0, microsecond=0),  # 5:30 PM IST
-            now.replace(hour=20, minute=30, second=0, microsecond=0)  # 8:30 PM IST
+            now.replace(hour=7, minute=30, second=0, microsecond=0),
+            now.replace(hour=13, minute=30, second=0, microsecond=0),
+            now.replace(hour=17, minute=30, second=0, microsecond=0),
+            now.replace(hour=20, minute=30, second=0, microsecond=0)
         ]
         
         valid_times = [t for t in target_times if t > now]
         next_time = min(valid_times) if valid_times else target_times[0] + timedelta(days=1)
         
-        sleep_seconds = (next_time - now).total_seconds()
-        logger.info(f"Next vocab at {next_time.strftime('%H:%M IST')}")
-        await asyncio.sleep(sleep_seconds)
+        await asyncio.sleep(max(1, (next_time - now).total_seconds()))
 
         try:
             sent_words = await load_sent_words()
-            word_message, unique_word = fetch_daily_word()
+            word_message, unique_word, audio_url = fetch_daily_word()
             
-            # Retry for unique word (max 3 attempts)
             retry = 0
             while unique_word in sent_words and retry < 3:
-                word_message, unique_word = fetch_daily_word()
+                word_message, unique_word, audio_url = fetch_daily_word()
                 retry += 1
             
-            await bot.send_message(
-                chat_id=VOCAB_CHANNEL,
-                text=word_message,
-                disable_web_page_preview=True
-            )
+            if audio_url and url(audio_url):
+                await bot.send_audio(
+                    chat_id=VOCAB_CHANNEL,
+                    audio=audio_url,
+                    caption=word_message,
+                    parse_mode=enums.ParseMode.HTML
+                )
+            else:
+                await bot.send_message(
+                    chat_id=VOCAB_CHANNEL,
+                    text=word_message,
+                    parse_mode=enums.ParseMode.HTML,
+                    disable_web_page_preview=True
+                )
+            
             sent_words.append(unique_word)
             await save_sent_words(sent_words)
             
@@ -231,22 +213,30 @@ async def instant_vocab_handler(client, message: Message):
     try:
         processing_msg = await message.reply("⏳ Generating unique vocabulary...")
         sent_words = await load_sent_words()
-        word_message, unique_word = fetch_daily_word()
+        word_message, unique_word, audio_url = fetch_daily_word()
         
-        # Retry for unique word (max 5 attempts)
         retry = 0
         while unique_word in sent_words and retry < 5:
-            word_message, unique_word = fetch_daily_word()
+            word_message, unique_word, audio_url = fetch_daily_word()
             retry += 1
         
-        await client.send_message(
-            chat_id=VOCAB_CHANNEL,
-            text=word_message,
-            disable_web_page_preview=True
-        )
+        if audio_url and url(audio_url):
+            await client.send_audio(
+                chat_id=VOCAB_CHANNEL,
+                audio=audio_url,
+                caption=word_message,
+                parse_mode=enums.ParseMode.HTML
+            )
+        else:
+            await client.send_message(
+                chat_id=VOCAB_CHANNEL,
+                text=word_message,
+                parse_mode=enums.ParseMode.HTML,
+                disable_web_page_preview=True
+            )
+        
         sent_words.append(unique_word)
         await save_sent_words(sent_words)
-        
         await processing_msg.edit("✅ Vocabulary published!")
         await client.send_message(
             chat_id=LOG_CHANNEL,
@@ -261,13 +251,13 @@ async def instant_vocab_handler(client, message: Message):
         )
 
 def schedule_vocabulary(client: Client):
-    """Starts the vocabulary scheduler and keeps it alive with retries"""
+    """Start vocabulary scheduler"""
     async def run_forever():
         while True:
             try:
                 await send_scheduled_vocabulary(client)
             except Exception as e:
-                logger.exception("Scheduler crashed, restarting in 10 seconds...")
-                await asyncio.sleep(10)  # Wait before retrying
+                logger.exception("Scheduler restarting...")
+                await asyncio.sleep(10)
 
     asyncio.create_task(run_forever())
