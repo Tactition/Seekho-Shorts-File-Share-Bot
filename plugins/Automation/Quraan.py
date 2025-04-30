@@ -2,8 +2,6 @@ import os
 import logging
 import asyncio
 import json
-import hashlib
-import html
 import time
 from datetime import datetime, timedelta
 from typing import Tuple
@@ -21,7 +19,7 @@ import aiofiles
 
 # Configure logger
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.INFO)
+logger.setLevel(logging.DEBUG)  # DEBUG to capture detailed logs
 
 # File to store sent verse IDs
 SENT_VERSES_FILE = "sent_verses.json"
@@ -29,7 +27,7 @@ MAX_STORED_VERSES = 6236  # Total number of Quran verses
 MAX_RETRIES = 5
 RETRY_DELAYS = [5, 15, 30, 60, 120]
 HEARTBEAT_INTERVAL = 43200  # 12 hours in seconds
-DAILY_SCHEDULE = ["08:00", "1:09", "20:00"]  # IST times
+DAILY_SCHEDULE = ["08:00", "1:15", "20:00"]  # IST times
 
 async def load_sent_verses() -> list:
     """Load sent verse numbers from file"""
@@ -91,10 +89,9 @@ async def fetch_quran_verse(verse_number: int) -> Tuple[str, str, str, str]:
             "1:1"
         )
 
-async def send_verse(bot: Client, verse_number: int):
+async def send_verse(bot: Client, verse_number: int) -> bool:
     """Send verse to channel with retry logic"""
     arabic, translation, audio, ref = await fetch_quran_verse(verse_number)
-    
     caption = (
         f"📖 **Quran Verse ({ref})**\n\n"
         f"<b>Arabic:</b>\n{arabic}\n\n"
@@ -121,66 +118,68 @@ async def send_verse(bot: Client, verse_number: int):
                 )
             return True
         except FloodWait as e:
+            logger.warning(f"FloodWait of {e.value}s, sleeping then retrying")
             await asyncio.sleep(e.value + 5)
         except RPCError as e:
             logger.error(f"Send attempt {attempt+1} failed: {str(e)}")
-            await asyncio.sleep(RETRY_DELAYS[attempt])
-    
+            await asyncio.sleep(RETRY_DELAYS[min(attempt, len(RETRY_DELAYS)-1)])
     return False
 
 async def send_scheduled_verses(bot: Client):
-    """Main scheduler with self-healing and monitoring"""
+    """Main scheduler with self-healing and detailed debug logging"""
     tz = timezone('Asia/Kolkata')
-    last_heartbeat = datetime.now()
+    last_heartbeat = datetime.now(tz)
     restart_count = 0
-    
+
     while True:
         try:
             now = datetime.now(tz)
+            logger.debug(f"[Scheduler] now={now!r}")
 
-            # Build a list of today’s schedule times, all timezone-aware
+            # Build today’s tz-aware schedule times
             target_times = []
             for t_str in DAILY_SCHEDULE:
                 hour, minute = map(int, t_str.split(':'))
                 t_naive = datetime(now.year, now.month, now.day, hour, minute)
                 t_aware = tz.localize(t_naive)
+                logger.debug(f"Parsed and localized slot: {t_aware!r}")
                 if t_aware > now:
                     target_times.append(t_aware)
 
-            # If none left today, schedule first time tomorrow
+            # Schedule first slot tomorrow if none left today
             if not target_times:
                 hour, minute = map(int, DAILY_SCHEDULE[0].split(':'))
                 next_day = now + timedelta(days=1)
                 next_naive = datetime(next_day.year, next_day.month, next_day.day, hour, minute)
                 next_time = tz.localize(next_naive)
+                logger.debug(f"No slots left; scheduling tomorrow at {next_time!r}")
             else:
                 next_time = min(target_times)
+                logger.debug(f"Next slot today at {next_time!r}")
 
             sleep_seconds = (next_time - now).total_seconds()
-            logger.info(f"Next verse scheduled at {next_time.strftime('%Y-%m-%d %H:%M:%S %Z')}")
+            logger.info(f"Next verse scheduled at {next_time.strftime('%Y-%m-%d %H:%M:%S %Z')} "
+                        f"(in {sleep_seconds:.0f}s)")
 
-            # Heartbeat monitoring
-            if (datetime.now() - last_heartbeat).total_seconds() > HEARTBEAT_INTERVAL:
-                await bot.send_message(
-                    chat_id=LOG_CHANNEL,
-                    text="💓 System Heartbeat: Quran scheduler operational"
-                )
-                last_heartbeat = datetime.now()
-            
+            # Heartbeat
+            if (now - last_heartbeat).total_seconds() > HEARTBEAT_INTERVAL:
+                await bot.send_message(chat_id=LOG_CHANNEL,
+                                       text="💓 System Heartbeat: Quran scheduler operational")
+                last_heartbeat = now
+
             await asyncio.sleep(max(1, sleep_seconds))
 
+            # Send the next verse
             sent_verses = await load_sent_verses()
             current_verse = 1 if not sent_verses else (sent_verses[-1] % MAX_STORED_VERSES) + 1
 
             if await send_verse(bot, current_verse):
                 sent_verses.append(current_verse)
                 await save_sent_verses(sent_verses)
-                
                 await bot.send_message(
                     chat_id=LOG_CHANNEL,
-                    text=f"📖 Verse {current_verse} sent at {datetime.now(tz).strftime('%Y-%m-%d %H:%M:%S')}"
+                    text=f"📖 Verse {current_verse} sent at {datetime.now(tz).strftime('%Y-%m-%d %H:%M:%S %Z')}"
                 )
-
             restart_count = 0
 
         except asyncio.CancelledError:
@@ -194,12 +193,13 @@ async def send_scheduled_verses(bot: Client):
                 text=f"🔥 CRITICAL ERROR ({restart_count}): {str(e)[:500]}"
             )
             if restart_count > 5:
-                logger.error("Maximum error threshold reached, exiting")
+                logger.error("Maximum error threshold reached, exiting scheduler")
                 return
             await asyncio.sleep(min(300, 30 * restart_count))
 
 @Client.on_message(filters.command('quran') & filters.user(ADMINS))
-async def instant_quran_handler(client, message: Message):
+async def instant_quran_handler(client: Client, message: Message):
+    """Handle /quran command for immediate verse send"""
     try:
         processing_msg = await message.reply("⏳ Fetching Quran verse...")
         sent_verses = await load_sent_verses()
@@ -208,7 +208,6 @@ async def instant_quran_handler(client, message: Message):
         if await send_verse(client, current_verse):
             sent_verses.append(current_verse)
             await save_sent_verses(sent_verses)
-            
             await processing_msg.edit(f"✅ Verse {current_verse} published!")
             await client.send_message(
                 chat_id=LOG_CHANNEL,
@@ -216,8 +215,8 @@ async def instant_quran_handler(client, message: Message):
             )
         else:
             await processing_msg.edit("❌ Failed to send verse")
-
     except Exception as e:
+        logger.error(f"Error in instant handler: {e}", exc_info=True)
         await processing_msg.edit(f"❌ Error: {str(e)[:200]}")
         await client.send_message(
             chat_id=LOG_CHANNEL,
@@ -237,5 +236,4 @@ def schedule_quran_verses(client: Client):
                     text="🔄 Restarting Quran scheduler..."
                 )
                 await asyncio.sleep(30)
-                
     asyncio.create_task(wrapper())
