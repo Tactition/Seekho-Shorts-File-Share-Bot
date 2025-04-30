@@ -89,8 +89,6 @@ def fetch_daily_word() -> Tuple[str, str, str]:
 
         system_prompt = f"""You are a creative English language expert. Generate vocabulary for {word} in this format:
 
-✨<b><i> Word Of The Day ! </i></b> ✨
-
 <b><i>📚 {word} </i></b>
 ━━━━━━━━━━━━━━━
 <b><i>Meaning :</i></b>[Short definition] 
@@ -102,11 +100,6 @@ def fetch_daily_word() -> Tuple[str, str, str]:
 <b>[Word1]:</b> [Explanation]
 <b>[Word2]:</b> [Different angle]
 <b>[Word3]:</b> [Unique take]
-
-<b><i>📝 Antonyms: </i></b>
-<b>[Word1] :</b> [Contrast]
-<b>[Word2] :</b> [Opposite]
-<b>[Word3] :</b> [Counterpart]
 
 <b><i>See It In Action!🎬</i></b>
 "[Example sentence]"
