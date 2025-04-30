@@ -18,6 +18,7 @@ from pyrogram.types import Message
 from pyrogram.errors import FloodWait, RPCError
 import aiofiles
 from groq import Groq
+from config import *
 
 # Configure logger
 logger = logging.getLogger(__name__)
