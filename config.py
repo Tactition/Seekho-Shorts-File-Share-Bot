@@ -61,6 +61,8 @@ VOCAB_CHANNEL = int(environ.get("VOCAB_CHANNEL" ,"-1002385764308"))  # replace w
 WONDERS_CHANNEL = int(environ.get("WONDERS_CHANNEL" ,"-1002590262680"))  # replace with your actual Trivia channel ID
 AFFIRMATIONS_CHANNEL = int(environ.get("AFFIRMATIONS_CHANNEL" ,"-1002691360886"))  
 
+QURAN_CHANNEL = int(environ.get("QURAN_CHANNEL " ,"-1002230949609"))  
+
 # Channel Information
 LOG_CHANNEL = int(environ.get("LOG_CHANNEL", "-1002230949609"))
 
