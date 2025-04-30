@@ -28,7 +28,7 @@ MAX_RETRIES = 5
 RETRY_DELAYS = [5, 15, 30, 60, 120]
 HEARTBEAT_INTERVAL = 43200
 QURAN_VERSES_COUNT = 6236
-DAILY_SCHEDULE = ["08:00", "12:16", "20:00"]  # 3 times daily in IST
+DAILY_SCHEDULE = ["08:00", "12:18", "20:00"]  # 3 times daily in IST
 
 class QuranState:
     def __init__(self):
