@@ -22,5 +22,6 @@ selenium
 webdriver-manager>=3.0
 aiofiles
 groq  
+gTTS
 
 
