@@ -37,7 +37,7 @@ from plugins.Automation.Wonders import schedule_wonders
 from plugins.Automation.Affirmation import schedule_daily_affirmations
 from plugins.Automation.Facts import schedule_facts
 from plugins.Automation.Vocabulary import schedule_vocabulary
-from plugins.Automation.Quraan import schedule_quran_verses
+from plugins.Automation.Quraan import start_quran_scheduler
 
 
 
