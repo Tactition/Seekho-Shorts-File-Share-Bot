@@ -32,7 +32,7 @@ MAX_RETRIES = 5
 RETRY_DELAYS = [5,15,30,60,120]
 HEARTBEAT_INTERVAL = 43200     # 12 hours
 # Four send-times per day:
-DAILY_SCHEDULE = ["06:00","12:00","18:00","00:00"]  # IST
+DAILY_SCHEDULE = ["06:00","12:00","18:00"]  # IST
 
 async def get_next_verse_number() -> int:
     """Atomically increment and retrieve the next verse number (1–6236)."""
@@ -72,7 +72,7 @@ async def send_verse(bot:Client, verse_number:int) -> bool:
         f"📖 <b> Quran Verse ({ref}) </b> \n\n"
         f"<b>Arabic:</b>\n{arabic}\n\n"
         f"<b>Translation:</b>\n{translation}\n\n"
-        "━━━━━━━━━\nReflect and Remember @Excellerators"
+        
     )
     for i in range(MAX_RETRIES):
         try:
