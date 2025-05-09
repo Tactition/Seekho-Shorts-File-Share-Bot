@@ -103,14 +103,12 @@ def fetch_daily_word() -> Tuple[str, str, str]:
 <b>[Word3]:</b> [Unique take]
 
 <b><i>See It In Action!🎬</i></b>
-"[Example sentence]"
-
-<b><i>🧭 Explore:</i></b> ➡️ @Excellerators"""
+"[Example sentence]" """
 
         response = client.chat.completions.create(
             messages=[
                 {"role": "system", "content": system_prompt},
-                {"role": "user", "content": f"Generate fresh entry for {word} and keep the 🧭 Explore: as @Excellerators everytime"}
+                {"role": "user", "content": f"Generate fresh entry for {word}"}
             ],
             model="llama3-70b-8192",
             temperature=1.3,
