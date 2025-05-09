@@ -104,8 +104,7 @@ def fetch_daily_word() -> Tuple[str, str, str]:
 
 <b><i>See It In Action!🎬</i></b>
 "[Example sentence]"
-
-<b><i>🧭 Explore:</i></b> ➡️ @Excellerators"""
+"""
 
         response = client.chat.completions.create(
             messages=[
