@@ -25,7 +25,7 @@ logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
 # Configuration
-client = Groq(api_key="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")
+client = Groq(api_key=groq_api_key)
 SENT_WORDS_FILE = "sent_words.json"
 MAX_STORED_WORDS = 500
 
