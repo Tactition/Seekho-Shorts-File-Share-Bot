@@ -208,7 +208,7 @@ async def paraphrase_content(text: str, bot: Client) -> tuple:  # Changed to asy
             "   Example: <b>🔥 Igniting the Spark: Unleash Greatness in Everyone</b>\n\n"
             
             "<blockquote><i>[Philosopher Quote]</i> — <b>[Philosopher Name]</b></blockquote>\n"
-            "(Select quotes from Aristotle, Nietzsche, Plato, Socrates or other philosophers)\n\n"
+            "(Select quotes from philosophers supporting the title context)\n\n"
             
             "Core Content (2-3 paragraphs, 1-2 lines each in motivational, inspirational, and persuasive manner):\n"
             "   - First paragraph: State core philosophy\n"
