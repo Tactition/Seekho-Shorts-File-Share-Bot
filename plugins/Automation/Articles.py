@@ -290,7 +290,7 @@ async def paraphrase_content(text: str, bot: Client) -> tuple:  # Changed to asy
             
             "Sprinkle a philosopher’s quote to add depth:\n"
             "   <blockquote><i>[Relevant Quote]</i> — <b>[Philosopher’s Name]</b></blockquote>\n"
-            "   (Use quotes from Aristotle, Plato, Nietzsche, Socrates, etc.)\n\n"
+            "   (Use quotes of Philosphers to support the context etc.)\n\n"
             
             "<b><u>3 Practical Principles:</u></b>\n"
             "   🔹 <b>Principle 1</b>: Clear and realistic tip\n"
