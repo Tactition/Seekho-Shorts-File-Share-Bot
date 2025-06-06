@@ -88,7 +88,7 @@ def fetch_daily_word() -> Tuple[str, str, str]:
     try:
         word = fetch_daily_vocabulary_word()
         
-        system_prompt = f"""You are a creative English language expert. Generate vocabulary for {word} in this format:
+        system_prompt = f"""You are a creative English language expert. Generate vocabulary for {word} in this format and dont include any follow-up suggestions or any feedback
 
 <b><i>📚 {word} </i></b>
 ━━━━━━━━━━━━━━━
@@ -109,7 +109,7 @@ def fetch_daily_word() -> Tuple[str, str, str]:
         response = client.chat.completions.create(
             messages=[
                 {"role": "system", "content": system_prompt},
-                {"role": "user", "content": f"Generate fresh entry for {word} and Respond only with the formatted content. Do not include introductions, summaries, or follow-up suggestions or any feedback"}
+                {"role": "user", "content": f"Generate fresh entry for {word}"}
             ],
             model="llama3-70b-8192",
             temperature=1.3,
