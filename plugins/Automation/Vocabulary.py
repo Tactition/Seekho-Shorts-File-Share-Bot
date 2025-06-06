@@ -109,7 +109,7 @@ def fetch_daily_word() -> Tuple[str, str, str]:
         response = client.chat.completions.create(
             messages=[
                 {"role": "system", "content": system_prompt},
-                {"role": "user", "content": f"Generate fresh entry for {word}"}
+                {"role": "user", "content": f"Generate fresh entry for {word} and Respond only with the formatted content. Do not include introductions, summaries, or follow-up suggestions or any feedback"}
             ],
             model="llama3-70b-8192",
             temperature=1.3,
