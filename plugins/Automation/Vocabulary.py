@@ -1,3 +1,4 @@
+
 import os
 import logging
 import random
@@ -86,11 +87,10 @@ def fetch_daily_word() -> Tuple[str, str, str]:
     """Generate vocabulary entry with pronunciation"""
     try:
         word = fetch_daily_vocabulary_word()
-        audio_url = fetch_pronunciation(word)
-
+        
         system_prompt = f"""You are a creative English language expert. Generate vocabulary for {word} in this format:
 
-<b><i>📚 word </i></b>
+<b><i>📚 {word} </i></b>
 ━━━━━━━━━━━━━━━
 <b><i>Meaning :</i></b>[Short definition] 
 
@@ -109,16 +109,22 @@ def fetch_daily_word() -> Tuple[str, str, str]:
         response = client.chat.completions.create(
             messages=[
                 {"role": "system", "content": system_prompt},
-                {"role": "user", "content": f"Generate fresh entry"}
+                {"role": "user", "content": f"Generate fresh entry for {word}"}
             ],
             model="llama3-70b-8192",
             temperature=1.3,
-            max_tokens=700
+            max_tokens=400
         )
         
         word_content = response.choices[0].message.content
         match = re.search(r"<b><i>📚\s*(.*?)\s*</i></b>", word_content)
-        unique_word = match.group(1) if match else hashlib.md5(word_content.encode()).hexdigest()
+        
+        # Determine which word to use for pronunciation
+        display_word = match.group(1).strip() if match else word
+        unique_word = display_word if match else hashlib.md5(word_content.encode()).hexdigest()
+        
+        # Get pronunciation for the display word
+        audio_url = fetch_pronunciation(display_word)
         
         return (word_content, unique_word, audio_url)
 
